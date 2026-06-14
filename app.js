@@ -351,12 +351,65 @@ function renderHeaderStats() {
     DOM.statsAvgGoals.innerText = played > 0 ? (goals / played).toFixed(2) : '0.0';
 }
 
+function isGameLive(game) {
+    if (game.finished === 'TRUE' || game.finished === true || game.time_elapsed === 'finished') {
+        return false;
+    }
+    
+    // Explicit API live state
+    const apiLive = game.time_elapsed && game.time_elapsed !== 'notstarted' && game.time_elapsed !== 'finished';
+    if (apiLive) {
+        return true;
+    }
+
+    // Clock-based inference fallback
+    const tz = STADIUM_TIMEZONES[game.stadium_id] || "America/New_York";
+    const startDate = parseLocalDateInTimezone(game.local_date, tz);
+    if (!startDate) return false;
+
+    const now = new Date();
+    const elapsedMs = now.getTime() - startDate.getTime();
+    const matchDurationMs = 105 * 60 * 1000;
+
+    return elapsedMs >= 0 && elapsedMs < matchDurationMs;
+}
+
+function getGameDisplayTime(game) {
+    if (game.finished === 'TRUE' || game.finished === true || game.time_elapsed === 'finished') {
+        return 'FINITA';
+    }
+
+    const tz = STADIUM_TIMEZONES[game.stadium_id] || "America/New_York";
+    const startDate = parseLocalDateInTimezone(game.local_date, tz);
+    const now = new Date();
+    const apiLive = game.time_elapsed && game.time_elapsed !== 'notstarted' && game.time_elapsed !== 'finished';
+
+    if (apiLive) {
+        return game.time_elapsed === 'live' ? 'LIVE' : game.time_elapsed + '\'';
+    }
+
+    if (startDate) {
+        const elapsedMs = now.getTime() - startDate.getTime();
+        const matchDurationMs = 105 * 60 * 1000;
+        
+        if (elapsedMs >= 0 && elapsedMs < matchDurationMs) {
+            let elapsedMin = Math.floor(elapsedMs / (60 * 1000));
+            if (elapsedMin > 45 && elapsedMin < 60) {
+                return 'INTERVALLO';
+            }
+            if (elapsedMin >= 60) {
+                elapsedMin -= 15;
+            }
+            return `${Math.min(90, elapsedMin)}'`;
+        }
+    }
+
+    return formatGameDate(game.local_date);
+}
+
 // 4. RENDER LIVE MATCHES TICKER
 function renderLiveMatchesTicker() {
-    const liveGames = STATE.games.filter(game => {
-        const isLive = game.time_elapsed && game.time_elapsed !== 'notstarted' && game.time_elapsed !== 'finished';
-        return isLive && (game.finished !== 'TRUE' && game.finished !== true);
-    });
+    const liveGames = STATE.games.filter(game => isGameLive(game));
 
     DOM.liveMatchesTicker.innerHTML = '';
     
@@ -376,7 +429,7 @@ function renderLiveMatchesTicker() {
         item.className = 'ticker-match-item';
         item.innerHTML = `
             <span class="live-dot animate-pulse"></span>
-            <span class="live-time">${game.time_elapsed === 'live' ? 'LIVE' : game.time_elapsed + '\''}</span>
+            <span class="live-time">${getGameDisplayTime(game)}</span>
             <span class="teams">${homeName} vs ${awayName}</span>
             <span class="score">${game.home_score} - ${game.away_score}</span>
         `;
@@ -393,7 +446,6 @@ function renderLiveMatchesTicker() {
     });
 }
 
-// 5. RENDER MATCHES TAB
 function renderMatchesGrid() {
     DOM.matchesGrid.innerHTML = '';
     
@@ -419,7 +471,7 @@ function renderMatchesGrid() {
         
         // Filter by live/finished status
         const finishedVal = game.finished === 'TRUE' || game.finished === true;
-        const isLive = game.time_elapsed && game.time_elapsed !== 'notstarted' && game.time_elapsed !== 'finished';
+        const isLive = isGameLive(game);
         
         let filterStatus = true;
         if (STATE.filters.status === 'live') {
@@ -479,7 +531,7 @@ function renderMatchesGrid() {
         const awayFlag = awayTeam ? awayTeam.flag : null;
         
         const finishedVal = game.finished === 'TRUE' || game.finished === true;
-        const isLive = game.time_elapsed && game.time_elapsed !== 'notstarted' && game.time_elapsed !== 'finished';
+        const isLive = isGameLive(game);
         
         const tz = STADIUM_TIMEZONES[game.stadium_id] || "America/New_York";
         const startDate = parseLocalDateInTimezone(game.local_date, tz);
@@ -502,7 +554,7 @@ function renderMatchesGrid() {
         
         if (isLive && !finishedVal) {
             statusClass = 'live-now';
-            statusText = `LIVE &bull; ${game.time_elapsed === 'live' ? '1\'' : game.time_elapsed + '\''}`;
+            statusText = `LIVE &bull; ${getGameDisplayTime(game)}`;
         } else if (finishedVal) {
             statusClass = 'finished';
             statusText = 'FINITA';
