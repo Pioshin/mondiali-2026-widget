@@ -129,7 +129,10 @@ document.addEventListener('DOMContentLoaded', () => {
     setupTabRouter();
     setupFilters();
     setupSimulatorControls();
-    loadData();
+    loadData().then(() => {
+        // Poll live updates from the API every 30 seconds
+        setInterval(pollLiveUpdates, 30000);
+    });
 });
 
 // 1. TABS ROUTER
@@ -1212,3 +1215,146 @@ function exportMatchToCalendar(matchId) {
 
 // Export function to global window scope
 window.exportMatchToCalendar = exportMatchToCalendar;
+
+// 12. REAL-TIME POLLING AND GOAL NOTIFICATION SYSTEM
+async function pollLiveUpdates() {
+    // Only poll if we are not actively running a simulated match
+    if (STATE.simulation.timerId && !STATE.simulation.isPaused) {
+        return;
+    }
+
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
+        const gamesRes = await fetch('https://worldcup26.ir/get/games', { signal: controller.signal });
+        clearTimeout(timeoutId);
+        
+        if (!gamesRes.ok) return;
+        const gamesData = await gamesRes.json();
+        const newGames = gamesData.games || gamesData;
+        
+        if (!Array.isArray(newGames) || newGames.length === 0) return;
+
+        // Detect goal events in live matches
+        detectGoals(newGames);
+        
+        // Update state
+        STATE.games = newGames;
+        
+        // Re-render
+        renderHeaderStats();
+        renderLiveMatchesTicker();
+        
+        if (STATE.activeTab === 'partite') {
+            renderMatchesGrid();
+        } else if (STATE.activeTab === 'classifiche') {
+            pollGroupsUpdates();
+        }
+    } catch (e) {
+        console.log('Live updates polling failed:', e);
+    }
+}
+
+async function pollGroupsUpdates() {
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
+        const groupsRes = await fetch('https://worldcup26.ir/get/groups', { signal: controller.signal });
+        clearTimeout(timeoutId);
+        
+        if (!groupsRes.ok) return;
+        const groupsData = await groupsRes.json();
+        STATE.groups = groupsData.groups || groupsData;
+        renderGroupsStandings();
+    } catch(e) {
+        console.log('Group standings polling failed:', e);
+    }
+}
+
+function detectGoals(newGames) {
+    newGames.forEach(newGame => {
+        const oldGame = STATE.games.find(g => g.id == newGame.id);
+        if (!oldGame) return;
+
+        const oldHome = parseInt(oldGame.home_score) || 0;
+        const oldAway = parseInt(oldGame.away_score) || 0;
+        const newHome = parseInt(newGame.home_score) || 0;
+        const newAway = parseInt(newGame.away_score) || 0;
+
+        const homeTeam = STATE.teamsMap[newGame.home_team_id];
+        const awayTeam = STATE.teamsMap[newGame.away_team_id];
+        const homeName = homeTeam ? homeTeam.name_en : (newGame.home_team_label || 'TBD');
+        const awayName = awayTeam ? awayTeam.name_en : (newGame.away_team_label || 'TBD');
+
+        if (newHome > oldHome) {
+            showGoalToast(newGame, homeName, { home: newHome, away: newAway });
+        }
+        if (newAway > oldAway) {
+            showGoalToast(newGame, awayName, { home: newHome, away: newAway });
+        }
+    });
+}
+
+function showGoalToast(match, scoringTeam, newScore) {
+    let container = document.getElementById('toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        document.body.appendChild(container);
+    }
+
+    const homeTeam = STATE.teamsMap[match.home_team_id];
+    const awayTeam = STATE.teamsMap[match.away_team_id];
+    const homeName = homeTeam ? homeTeam.name_en : (match.home_team_label || 'TBD');
+    const awayName = awayTeam ? awayTeam.name_en : (match.away_team_label || 'TBD');
+
+    const toast = document.createElement('div');
+    toast.className = 'goal-toast';
+    toast.innerHTML = `
+        <div class="toast-icon">⚽</div>
+        <div class="toast-content">
+            <div class="toast-title">GOOOL!</div>
+            <div class="toast-body">Il <strong>${scoringTeam}</strong> ha segnato!</div>
+            <div class="toast-score">${homeName} <strong>${newScore.home} - ${newScore.away}</strong> ${awayName}</div>
+        </div>
+    `;
+
+    container.appendChild(toast);
+    
+    // Play celebratory sound
+    playGoalSound();
+
+    setTimeout(() => {
+        toast.classList.add('fade-out');
+        toast.addEventListener('transitionend', () => {
+            toast.remove();
+        });
+    }, 5000);
+}
+
+function playGoalSound() {
+    try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const notes = [261.63, 329.63, 392.00, 523.25]; // C4 -> E4 -> G4 -> C5 celebratory chord
+        let startTime = audioCtx.currentTime;
+        
+        notes.forEach((freq, index) => {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, startTime + index * 0.1);
+            
+            gain.gain.setValueAtTime(0.12, startTime + index * 0.1);
+            gain.gain.exponentialRampToValueAtTime(0.001, startTime + index * 0.1 + 0.25);
+            
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            
+            osc.start(startTime + index * 0.1);
+            osc.stop(startTime + index * 0.1 + 0.25);
+        });
+    } catch (e) {
+        console.warn('Audio context blocked or unsupported', e);
+    }
+}
