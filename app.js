@@ -107,6 +107,9 @@ const DOM = {
     // Classifiche Tab
     groupsStandingsGrid: document.getElementById('groups-standings-grid'),
     
+    // Tabellone Tab
+    bracketContainer: document.getElementById('bracket-container'),
+    
     // Squadre Tab
     searchSquadreInput: document.getElementById('search-squadre-input'),
     teamsCardsGrid: document.getElementById('teams-cards-grid'),
@@ -186,6 +189,8 @@ function setupTabRouter() {
                 populateSimulatorDropdowns();
             } else if (targetTab === 'scommesse') {
                 syncFantaData();
+            } else if (targetTab === 'tabellone') {
+                renderBracket();
             }
         });
     });
@@ -332,6 +337,7 @@ function processData() {
     renderMatchesGrid();
     renderGroupsStandings();
     renderTeamsGrid();
+    renderBracket();
 }
 
 // 3. RENDER HEADER STATS
@@ -1399,6 +1405,8 @@ async function pollLiveUpdates() {
             renderMatchesGrid();
         } else if (STATE.activeTab === 'classifiche') {
             pollGroupsUpdates();
+        } else if (STATE.activeTab === 'tabellone') {
+            renderBracket();
         }
         
         // Sync FantaMondiali in the background (if cloud active or on the tab)
@@ -2212,3 +2220,160 @@ function setupFantaMondiali() {
 window.savePlayerBet = savePlayerBet;
 window.setBetEditMode = setBetEditMode;
 window.syncFantaData = syncFantaData;
+
+// ==========================================
+// TOURNAMENT BRACKET (TABELLONE) RENDERER
+// ==========================================
+
+function renderBracket() {
+    const container = DOM.bracketContainer;
+    if (!container) return;
+
+    if (!STATE.games || STATE.games.length === 0) {
+        container.innerHTML = `<p class="table-empty">Nessun dato disponibile per il tabellone.</p>`;
+        return;
+    }
+
+    // Define column match IDs in connection order
+    const r32Ids = [74, 77, 73, 75, 76, 78, 79, 80, 83, 84, 81, 82, 86, 88, 85, 87];
+    const r16Ids = [89, 90, 91, 92, 93, 94, 95, 96];
+    const qfIds = [97, 99, 98, 100];
+    const sfIds = [101, 102];
+    const finalId = 104;
+    const thirdId = 103;
+
+    const getMatches = (ids) => ids.map(id => STATE.games.find(g => g.id == id)).filter(Boolean);
+
+    const r32Matches = getMatches(r32Ids);
+    const r16Matches = getMatches(r16Ids);
+    const qfMatches = getMatches(qfIds);
+    const sfMatches = getMatches(sfIds);
+    const finalMatch = STATE.games.find(g => g.id == finalId);
+    const thirdMatch = STATE.games.find(g => g.id == thirdId);
+
+    container.innerHTML = `
+        <div class="bracket-grid">
+            <!-- Column 1: Sedicesimi -->
+            <div class="bracket-column round-r32">
+                <div class="column-header">Sedicesimi di Finale</div>
+                <div class="column-matches">
+                    ${r32Matches.map(m => renderBracketMatchCard(m)).join('')}
+                </div>
+            </div>
+
+            <!-- Column 2: Ottavi -->
+            <div class="bracket-column round-r16">
+                <div class="column-header">Ottavi di Finale</div>
+                <div class="column-matches">
+                    ${r16Matches.map(m => renderBracketMatchCard(m)).join('')}
+                </div>
+            </div>
+
+            <!-- Column 3: Quarti -->
+            <div class="bracket-column round-qf">
+                <div class="column-header">Quarti di Finale</div>
+                <div class="column-matches">
+                    ${qfMatches.map(m => renderBracketMatchCard(m)).join('')}
+                </div>
+            </div>
+
+            <!-- Column 4: Semifinali -->
+            <div class="bracket-column round-sf">
+                <div class="column-header">Semifinali</div>
+                <div class="column-matches">
+                    ${sfMatches.map(m => renderBracketMatchCard(m)).join('')}
+                </div>
+            </div>
+
+            <!-- Column 5: Finali -->
+            <div class="bracket-column round-finals">
+                <div class="column-header">Finali</div>
+                <div class="column-matches">
+                    <div class="finals-container">
+                        <div class="final-match-wrapper">
+                            <span class="finals-label">🥇 Primo Posto</span>
+                            ${finalMatch ? renderBracketMatchCard(finalMatch) : ''}
+                        </div>
+                        <div class="third-match-wrapper" style="margin-top: 40px;">
+                            <span class="finals-label">🥉 Terzo Posto</span>
+                            ${thirdMatch ? renderBracketMatchCard(thirdMatch) : ''}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function renderBracketMatchCard(game) {
+    if (!game) return '';
+    
+    const finishedVal = game.finished === 'TRUE' || game.finished === true;
+    const isLive = isGameLive(game);
+    
+    const homeTeam = STATE.teamsMap[game.home_team_id];
+    const awayTeam = STATE.teamsMap[game.away_team_id];
+    
+    const homeName = homeTeam ? homeTeam.name_en : (game.home_team_label || 'TBD');
+    const awayName = awayTeam ? awayTeam.name_en : (game.away_team_label || 'TBD');
+    const homeFlag = homeTeam ? homeTeam.flag : null;
+    const awayFlag = awayTeam ? awayTeam.flag : null;
+
+    const homeScore = finishedVal || isLive ? game.home_score : '-';
+    const awayScore = finishedVal || isLive ? game.away_score : '-';
+
+    // Winner classes
+    let homeClass = '';
+    let awayClass = '';
+    if (finishedVal) {
+        const hsVal = parseInt(game.home_score) || 0;
+        const asVal = parseInt(game.away_score) || 0;
+        if (hsVal > asVal) {
+            homeClass = 'winner';
+            awayClass = 'loser';
+        } else if (asVal > hsVal) {
+            awayClass = 'winner';
+            homeClass = 'loser';
+        }
+    }
+
+    let statusText = '';
+    let statusClass = 'upcoming';
+    if (isLive) {
+        statusText = `LIVE • ${getGameDisplayTime(game)}`;
+        statusClass = 'live';
+    } else if (finishedVal) {
+        statusText = 'FINITA';
+        statusClass = 'finished';
+    } else {
+        statusText = game.local_date.split(' ')[0];
+    }
+
+    return `
+        <div class="bracket-match-card ${isLive ? 'live' : ''} ${finishedVal ? 'finished' : ''}">
+            <div class="bracket-match-header">
+                <span class="match-badge ${statusClass}">${statusText}</span>
+                <span class="match-num">Match ${game.id}</span>
+            </div>
+            <div class="bracket-match-teams">
+                <div class="bracket-team-row ${homeClass}">
+                    <div class="team-lbl">
+                        ${homeFlag ? `<img src="${homeFlag}" alt="" class="bracket-flag">` : `<div class="bracket-flag-placeholder">?</div>`}
+                        <span class="bracket-team-name" title="${homeName}">${homeName}</span>
+                    </div>
+                    <span class="bracket-score">${homeScore}</span>
+                </div>
+                <div class="bracket-team-row ${awayClass}">
+                    <div class="team-lbl">
+                        ${awayFlag ? `<img src="${awayFlag}" alt="" class="bracket-flag">` : `<div class="bracket-flag-placeholder">?</div>`}
+                        <span class="bracket-team-name" title="${awayName}">${awayName}</span>
+                    </div>
+                    <span class="bracket-score">${awayScore}</span>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+window.renderBracket = renderBracket;
+

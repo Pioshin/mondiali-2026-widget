@@ -70,6 +70,10 @@
                     <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" class="tab-icon"><path d="M12 20h9"></path><path d="M3 20v-8a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v8"></path><path d="M11 20v-4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v8"></path></svg>
                     <span>Classifiche Gironi</span>
                 </button>
+                <button class="tab-btn" data-tab="tabellone">
+                    <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" class="tab-icon"><path d="M12 2v20M17 5H7M19 12H5M17 19H7"></path></svg>
+                    <span>Tabellone</span>
+                </button>
                 <button class="tab-btn" data-tab="squadre">
                     <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" class="tab-icon"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
                     <span>Squadre</span>
@@ -159,7 +163,24 @@
                         </div>
                     </div>
                 </section>
-
+                
+                <!-- TAB 2.5: TABELLONE (BRACKET) -->
+                <section class="tab-panel" id="pane-tabellone">
+                    <div class="tabellone-header-info" style="margin-bottom: 20px;">
+                        <h3>Tabellone Fase a Eliminazione Diretta</h3>
+                        <p style="color: var(--text-muted); font-size: 0.85rem;">Segui il cammino delle 32 squadre qualificate dai sedicesimi di finale fino alla gloriosa finale.</p>
+                    </div>
+                    <div class="bracket-wrapper" style="overflow-x: auto; width: 100%; padding-bottom: 15px; border-radius: 8px;">
+                        <div class="bracket-container" id="bracket-container">
+                            <!-- Dynamic Bracket Columns Rendered Here -->
+                            <div class="loading-state">
+                                <div class="spinner"></div>
+                                <p>Caricamento tabellone in corso...</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+                
                 <!-- TAB 3: SQUADRE (TEAMS) -->
                 <section class="tab-panel" id="pane-squadre">
                     <div class="filter-toolbar">
