@@ -74,6 +74,10 @@
                     <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" class="tab-icon"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
                     <span>Squadre</span>
                 </button>
+                <button class="tab-btn highlight-gold" data-tab="scommesse">
+                    <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" class="tab-icon"><circle cx="12" cy="8" r="7"></circle><path d="M8.21 13.89L7 23l5-3 5 3-1.21-9.12"></path></svg>
+                    <span>FantaMondiali</span>
+                </button>
                 <button class="tab-btn highlight" data-tab="simulatore">
                     <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" class="tab-icon"><circle cx="12" cy="12" r="10"></circle><polygon points="10 8 16 12 10 16 10 8"></polygon></svg>
                     <span>Simulatore Live</span>
@@ -182,6 +186,14 @@
                             <h3>⚽ Simulatore di Partite Live</h3>
                             <p>Non ci sono partite in corso adesso? Nessun problema! Scegli due squadre nazionali e simula una partita in tempo reale completa di eventi di gara, marcatori e cronometro accelerato.</p>
                             
+                            <!-- Tournament Match Selector to Associate Predictions -->
+                            <div class="setting-item" style="width: 100%; margin-bottom: 16px; display: flex; flex-direction: column; gap: 4px;">
+                                <label for="sim-match-select" style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted);">Associa Partita del Torneo (Opzionale per Scommesse)</label>
+                                <select id="sim-match-select" style="width: 100%; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--panel-border); border-radius: 8px; padding: 10px 12px; color: #ffffff; font-family: var(--font-body); font-size: 0.9rem; font-weight: 600; outline: none; cursor: pointer;">
+                                    <option value="">-- Partita Libera (Nessuna associazione al calendario) --</option>
+                                </select>
+                            </div>
+
                             <div class="sim-teams-selector">
                                 <div class="team-select-box">
                                     <label for="sim-home-team">Squadra Casa</label>
@@ -265,6 +277,124 @@
                             </div>
                         </div>
                     </div>
+                </section>
+                
+                <!-- TAB 5: SCOMMESSE (BETS / FANTAMONDIALI) -->
+                <section class="tab-panel" id="pane-scommesse">
+                    <div class="scommesse-layout">
+                        <!-- Column 1: Leaderboard & Database Configuration -->
+                        <div class="scommesse-sidebar">
+                            
+                            <!-- DB Status & Settings Trigger -->
+                            <div class="db-status-card glass-panel">
+                                <div class="db-status-header">
+                                    <span class="db-badge" id="db-conn-status">
+                                        <span class="status-dot yellow"></span>
+                                        <span>Modalità Locale (Offline)</span>
+                                    </span>
+                                    <button class="db-settings-toggle-btn" id="db-settings-toggle-btn">
+                                        <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                                    </button>
+                                </div>
+                                <p class="db-explanation" id="db-explanation-text">I dati di gioco sono salvati sul tuo dispositivo. Clicca sull'icona delle impostazioni per connettere il tuo database MongoDB Atlas e giocare a distanza con la famiglia!</p>
+                                
+                                <!-- Hidden Config Panel -->
+                                <div class="db-config-panel hidden" id="db-config-panel">
+                                    <h4>Impostazioni MongoDB Atlas</h4>
+                                    <div class="input-item">
+                                        <label for="mongo-endpoint">Endpoint URL Data API</label>
+                                        <input type="text" id="mongo-endpoint" placeholder="https://data.mongodb-api.com/.../v1">
+                                    </div>
+                                    <div class="input-item">
+                                        <label for="mongo-apikey">API Key</label>
+                                        <input type="password" id="mongo-apikey" placeholder="Inserisci la tua API Key">
+                                    </div>
+                                    <div class="input-row">
+                                        <div class="input-item">
+                                            <label for="mongo-datasource">Cluster Name</label>
+                                            <input type="text" id="mongo-datasource" placeholder="Cluster0">
+                                        </div>
+                                        <div class="input-item">
+                                            <label for="mongo-database">Database Name</label>
+                                            <input type="text" id="mongo-database" placeholder="fantamondiali">
+                                        </div>
+                                    </div>
+                                    <div class="config-actions">
+                                        <button class="db-btn-connect" id="db-connect-btn">Connetti</button>
+                                        <button class="db-btn-disconnect hidden" id="db-disconnect-btn">Disconnetti</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Leaderboard -->
+                            <div class="leaderboard-card glass-panel">
+                                <h3>🏆 Classifica FantaMondiali</h3>
+                                <div class="leaderboard-container">
+                                    <table class="leaderboard-table">
+                                        <thead>
+                                            <tr>
+                                                <th class="col-rank">Pos</th>
+                                                <th class="col-name">Giocatore</th>
+                                                <th class="col-pts">Punti</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="game-leaderboard-body">
+                                            <!-- Loaded dynamically -->
+                                            <tr>
+                                                <td colspan="3" class="table-empty">Nessun giocatore registrato.</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                        </div>
+
+                        <!-- Column 2: Player Selection and Betting Cards -->
+                        <div class="scommesse-main">
+                            <!-- Player Selection / Creation -->
+                            <div class="player-manager-card glass-panel">
+                                <div class="player-manager-header">
+                                    <div class="player-select-wrapper">
+                                        <label for="active-player-select">Giocatore Attivo</label>
+                                        <select id="active-player-select">
+                                            <option value="">-- Seleziona Giocatore --</option>
+                                        </select>
+                                    </div>
+                                    <div class="player-divider">oppure</div>
+                                    <div class="player-create-wrapper">
+                                        <label for="create-player-input">Aggiungi Nuovo Giocatore</label>
+                                        <div class="input-group">
+                                            <input type="text" id="create-player-input" placeholder="Esempio: Marco">
+                                            <button id="create-player-btn">Aggiungi</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Bets Area -->
+                            <div class="bets-area-container">
+                                <div class="bets-area-header">
+                                    <h3>🔮 I Tuoi Pronostici</h3>
+                                    <span class="active-player-tag" id="active-player-tag">Seleziona un giocatore</span>
+                                </div>
+
+                                <div class="bets-matches-list" id="bets-matches-list">
+                                    <div class="empty-state">
+                                        <svg viewBox="0 0 24 24" width="48" height="48" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                            <circle cx="9" cy="7" r="4"></circle>
+                                        </svg>
+                                        <h4>Nessun Giocatore Selezionato</h4>
+                                        <p>Seleziona un giocatore dal menu in alto o creane uno nuovo per iniziare a inserire i tuoi pronostici.</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                </section>
+                
                 </section>
 
             </div>

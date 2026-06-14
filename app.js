@@ -25,6 +25,17 @@ const STATE = {
         time: 0,
         speed: 15, // 1 game min = 4s of wall time at 15x
         events: []
+    },
+    fanta: {
+        players: [],
+        activePlayerId: '',
+        isCloud: false,
+        config: {
+            endpoint: '',
+            apiKey: '',
+            dataSource: '',
+            database: ''
+        }
     }
 };
 
@@ -103,6 +114,7 @@ const DOM = {
     // Simulatore Tab
     simConfigPanel: document.getElementById('sim-config-panel'),
     simActivePanel: document.getElementById('sim-active-panel'),
+    simMatchSelect: document.getElementById('sim-match-select'),
     simHomeTeam: document.getElementById('sim-home-team'),
     simAwayTeam: document.getElementById('sim-away-team'),
     simSpeed: document.getElementById('sim-speed'),
@@ -119,6 +131,24 @@ const DOM = {
     simPauseBtn: document.getElementById('sim-pause-btn'),
     simStopBtn: document.getElementById('sim-stop-btn'),
     simEventList: document.getElementById('sim-event-list'),
+
+    // Scommesse Tab
+    dbConnStatus: document.getElementById('db-conn-status'),
+    dbSettingsToggleBtn: document.getElementById('db-settings-toggle-btn'),
+    dbExplanationText: document.getElementById('db-explanation-text'),
+    dbConfigPanel: document.getElementById('db-config-panel'),
+    mongoEndpoint: document.getElementById('mongo-endpoint'),
+    mongoApiKey: document.getElementById('mongo-apikey'),
+    mongoDatasource: document.getElementById('mongo-datasource'),
+    mongoDatabase: document.getElementById('mongo-database'),
+    dbConnectBtn: document.getElementById('db-connect-btn'),
+    dbDisconnectBtn: document.getElementById('db-disconnect-btn'),
+    gameLeaderboardBody: document.getElementById('game-leaderboard-body'),
+    activePlayerSelect: document.getElementById('active-player-select'),
+    createPlayerInput: document.getElementById('create-player-input'),
+    createPlayerBtn: document.getElementById('create-player-btn'),
+    activePlayerTag: document.getElementById('active-player-tag'),
+    betsMatchesList: document.getElementById('bets-matches-list'),
     
     // Footer
     apiStatus: document.getElementById('api-status')
@@ -129,6 +159,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupTabRouter();
     setupFilters();
     setupSimulatorControls();
+    setupFantaMondiali(); // Initialize Scommesse
     loadData().then(() => {
         // Poll live updates from the API every 30 seconds
         setInterval(pollLiveUpdates, 30000);
@@ -153,6 +184,8 @@ function setupTabRouter() {
             // Specific panel setups
             if (targetTab === 'simulatore') {
                 populateSimulatorDropdowns();
+            } else if (targetTab === 'scommesse') {
+                syncFantaData();
             }
         });
     });
@@ -817,6 +850,23 @@ function populateSimulatorDropdowns() {
         DOM.simHomeTeam.appendChild(optHome);
         DOM.simAwayTeam.appendChild(optAway);
     });
+
+    // Populate matches select dropdown
+    if (DOM.simMatchSelect) {
+        DOM.simMatchSelect.innerHTML = '<option value="">-- Partita Libera (Nessuna associazione al calendario) --</option>';
+        // Show notstarted/upcoming games
+        const upcomingGames = STATE.games.filter(g => g.finished !== 'TRUE' && g.finished !== true);
+        upcomingGames.forEach(game => {
+            const homeT = STATE.teamsMap[game.home_team_id];
+            const awayT = STATE.teamsMap[game.away_team_id];
+            const homeName = homeT ? homeT.name_en : (game.home_team_label || 'TBD');
+            const awayName = awayT ? awayT.name_en : (game.away_team_label || 'TBD');
+            const opt = document.createElement('option');
+            opt.value = game.id;
+            opt.innerText = `Gara ${game.id}: ${homeName} vs ${awayName} (${translateStage(game.type)})`;
+            DOM.simMatchSelect.appendChild(opt);
+        });
+    }
 }
 
 // 10. INTERACTIVE MATCH SIMULATOR ENGINE
@@ -824,6 +874,24 @@ function setupSimulatorControls() {
     DOM.startSimulationBtn.addEventListener('click', startMatchSimulation);
     DOM.simPauseBtn.addEventListener('click', togglePauseSimulation);
     DOM.simStopBtn.addEventListener('click', stopMatchSimulation);
+
+    if (DOM.simMatchSelect) {
+        DOM.simMatchSelect.addEventListener('change', (e) => {
+            const selectedMatchId = e.target.value;
+            if (selectedMatchId) {
+                const game = STATE.games.find(g => g.id == selectedMatchId);
+                if (game) {
+                    DOM.simHomeTeam.value = game.home_team_id;
+                    DOM.simAwayTeam.value = game.away_team_id;
+                    DOM.simHomeTeam.disabled = true;
+                    DOM.simAwayTeam.disabled = true;
+                }
+            } else {
+                DOM.simHomeTeam.disabled = false;
+                DOM.simAwayTeam.disabled = false;
+            }
+        });
+    }
 }
 
 function startMatchSimulation() {
@@ -835,9 +903,10 @@ function startMatchSimulation() {
         return;
     }
 
-    const homeTeam = STATE.teamsMap[homeId];
+        const homeTeam = STATE.teamsMap[homeId];
     const awayTeam = STATE.teamsMap[awayId];
     const speed = parseInt(DOM.simSpeed.value) || 15;
+    const associatedMatchId = DOM.simMatchSelect ? DOM.simMatchSelect.value : '';
 
     // Reset Simulation State
     STATE.simulation = {
@@ -851,7 +920,8 @@ function startMatchSimulation() {
         awayScorers: [],
         time: 0,
         speed: speed,
-        events: []
+        events: [],
+        matchId: associatedMatchId
     };
 
     // Update UI panels
@@ -901,6 +971,29 @@ function simulationTick() {
         logSimEvent(90, `Fischio finale! Partita terminata. Risultato finale: ${sim.homeTeam.name_en} ${sim.homeScore} - ${sim.awayScore} ${sim.awayTeam.name_en}.`, 'system-msg');
         DOM.simPauseBtn.classList.add('hidden');
         DOM.simStopBtn.innerText = 'Configura Nuova Partita';
+        
+        // If there's an associated match ID, resolve it in the tournament schedule!
+        if (sim.matchId) {
+            const tournamentGame = STATE.games.find(g => g.id == sim.matchId);
+            if (tournamentGame) {
+                tournamentGame.home_score = sim.homeScore.toString();
+                tournamentGame.away_score = sim.awayScore.toString();
+                tournamentGame.finished = true; // Mark as finished
+                tournamentGame.time_elapsed = 'finished';
+                
+                // Recalculate standings, update caches, and refresh UI
+                processData(); 
+                saveDataToCache();
+                
+                // Repopulate simulation dropdowns (to remove this game from upcoming ones)
+                populateSimulatorDropdowns();
+                
+                // Recalculate and sync FantaMondiali points
+                if (typeof syncFantaData === 'function') {
+                    syncFantaData();
+                }
+            }
+        }
         return;
     }
 
@@ -1016,6 +1109,11 @@ function stopMatchSimulation() {
         clearInterval(sim.timerId);
     }
     
+    // Re-enable team select dropdowns
+    if (DOM.simHomeTeam) DOM.simHomeTeam.disabled = false;
+    if (DOM.simAwayTeam) DOM.simAwayTeam.disabled = false;
+    if (DOM.simMatchSelect) DOM.simMatchSelect.value = '';
+
     // Reset simulation panel visibility
     DOM.simActivePanel.classList.add('hidden');
     DOM.simConfigPanel.classList.remove('hidden');
@@ -1250,6 +1348,11 @@ async function pollLiveUpdates() {
         } else if (STATE.activeTab === 'classifiche') {
             pollGroupsUpdates();
         }
+        
+        // Sync FantaMondiali in the background (if cloud active or on the tab)
+        if (STATE.fanta.isCloud || STATE.activeTab === 'scommesse') {
+            syncFantaData();
+        }
     } catch (e) {
         console.log('Live updates polling failed:', e);
     }
@@ -1358,3 +1461,702 @@ function playGoalSound() {
         console.warn('Audio context blocked or unsupported', e);
     }
 }
+
+// ==========================================
+// FANTAMONDIALI (BETS / REMOTE GAME) ENGINE
+// ==========================================
+
+function escapeHTML(str) {
+    if (!str) return '';
+    return str.toString()
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function saveDataToCache() {
+    const cacheKey = 'worldcup2026_data';
+    const cacheTimeKey = 'worldcup2026_data_time';
+    localStorage.setItem(cacheKey, JSON.stringify({
+        teams: STATE.teams,
+        games: STATE.games,
+        groups: STATE.groups,
+        stadiums: STATE.stadiums
+    }));
+    localStorage.setItem(cacheTimeKey, Date.now().toString());
+}
+
+async function mongoFetch(action, payload) {
+    const config = STATE.fanta.config;
+    if (!config.endpoint || !config.apiKey) {
+        throw new Error("Credenziali MongoDB non configurate.");
+    }
+    let baseUrl = config.endpoint.trim();
+    if (!baseUrl.endsWith('/')) {
+        baseUrl += '/';
+    }
+    const url = `${baseUrl}${action}`;
+    
+    const headers = {
+        'Content-Type': 'application/json',
+        'api-key': config.apiKey,
+        'Accept': 'application/json'
+    };
+    
+    const body = {
+        dataSource: config.dataSource.trim(),
+        database: config.database.trim(),
+        collection: 'players',
+        ...payload
+    };
+
+    console.log(`[Mongo Data API] Requesting ${action} on collection players...`);
+
+    const res = await fetch(url, {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify(body)
+    });
+
+    if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Data API Error ${res.status}: ${errText}`);
+    }
+
+    return await res.json();
+}
+
+async function testMongoConnection() {
+    try {
+        await mongoFetch('find', { limit: 1 });
+        return true;
+    } catch (e) {
+        console.error("Test connection failed:", e);
+        return false;
+    }
+}
+
+function getLocalPlayers() {
+    try {
+        return JSON.parse(localStorage.getItem('fanta_players') || '[]');
+    } catch(e) {
+        console.error("Failed to parse local players", e);
+        return [];
+    }
+}
+
+function saveLocalPlayers(players) {
+    localStorage.setItem('fanta_players', JSON.stringify(players));
+}
+
+async function syncFantaData() {
+    if (STATE.fanta.isCloud) {
+        updateDbStatus('connecting');
+        try {
+            const res = await mongoFetch('find', {});
+            STATE.fanta.players = res.documents || [];
+            updateDbStatus('connected');
+        } catch (e) {
+            console.error("Failed to fetch players from MongoDB:", e);
+            updateDbStatus('error', e.message);
+            // Fallback to local
+            STATE.fanta.players = getLocalPlayers();
+        }
+    } else {
+        updateDbStatus('local');
+        STATE.fanta.players = getLocalPlayers();
+    }
+
+    populatePlayerSelect();
+    updateLeaderboard();
+    renderBetsMatches();
+}
+
+function updateDbStatus(status, message) {
+    if (!DOM.dbConnStatus) return;
+    const statusDot = DOM.dbConnStatus.querySelector('.status-dot');
+    const statusText = DOM.dbConnStatus.querySelector('span:not(.status-dot)');
+    
+    // Reset classes
+    statusDot.className = 'status-dot';
+    DOM.dbConnStatus.classList.remove('connected');
+    
+    DOM.dbConnectBtn.classList.remove('hidden');
+    DOM.dbDisconnectBtn.classList.add('hidden');
+    
+    if (status === 'connected') {
+        statusDot.classList.add('green');
+        DOM.dbConnStatus.classList.add('connected');
+        statusText.textContent = 'MongoDB Atlas Collegato';
+        DOM.dbConnectBtn.classList.add('hidden');
+        DOM.dbDisconnectBtn.classList.remove('hidden');
+        DOM.dbExplanationText.textContent = "Connesso a MongoDB Atlas. I pronostici e la classifica sono sincronizzati in tempo reale con la tua famiglia!";
+    } else if (status === 'connecting') {
+        statusDot.classList.add('yellow');
+        statusText.textContent = 'Connessione in corso...';
+        DOM.dbExplanationText.textContent = "Tentativo di connessione al database MongoDB Atlas in corso...";
+    } else if (status === 'error') {
+        statusDot.classList.add('red');
+        statusText.textContent = 'Errore Connessione';
+        DOM.dbExplanationText.innerHTML = `<span style="color:var(--danger-red)">Impossibile connettersi. Errore: ${message}</span>`;
+    } else {
+        // local
+        statusDot.classList.add('yellow');
+        statusText.textContent = 'Modalità Locale (Offline)';
+        DOM.dbExplanationText.textContent = "I dati di gioco sono salvati sul tuo dispositivo. Clicca sull'icona delle impostazioni per connettere il tuo database MongoDB Atlas e giocare a distanza con la famiglia!";
+    }
+}
+
+function populatePlayerSelect() {
+    const select = DOM.activePlayerSelect;
+    if (!select) return;
+    
+    const prevValue = select.value || STATE.fanta.activePlayerId;
+    
+    // Keep first option
+    select.innerHTML = '<option value="">-- Seleziona Giocatore --</option>';
+    
+    STATE.fanta.players.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.name;
+        opt.textContent = p.name;
+        if (p.name === prevValue) {
+            opt.selected = true;
+        }
+        select.appendChild(opt);
+    });
+
+    if (STATE.fanta.players.some(p => p.name === prevValue)) {
+        STATE.fanta.activePlayerId = prevValue;
+        DOM.activePlayerTag.textContent = `Giocatore: ${prevValue}`;
+    } else {
+        STATE.fanta.activePlayerId = '';
+        DOM.activePlayerTag.textContent = 'Seleziona un giocatore';
+    }
+}
+
+async function handleAddPlayer() {
+    const input = DOM.createPlayerInput;
+    if (!input) return;
+    
+    const name = input.value.trim();
+    if (!name) {
+        alert("Inserisci un nome valido.");
+        return;
+    }
+
+    // Check duplicate name
+    if (STATE.fanta.players.some(p => p.name.toLowerCase() === name.toLowerCase())) {
+        alert("Questo nome è già presente nel gioco.");
+        return;
+    }
+
+    try {
+        if (STATE.fanta.isCloud) {
+            updateDbStatus('connecting', 'Salvataggio nuovo giocatore...');
+            await mongoFetch('updateOne', {
+                filter: { name: name },
+                update: {
+                    $setOnInsert: {
+                        name: name,
+                        points: 0,
+                        bets: {}
+                    }
+                },
+                upsert: true
+            });
+        } else {
+            const players = getLocalPlayers();
+            players.push({
+                name: name,
+                points: 0,
+                bets: {}
+            });
+            saveLocalPlayers(players);
+        }
+        
+        input.value = '';
+        STATE.fanta.activePlayerId = name;
+        await syncFantaData();
+    } catch(e) {
+        alert("Impossibile aggiungere il giocatore: " + e.message);
+        syncFantaData();
+    }
+}
+
+async function savePlayerBet(matchId) {
+    const activePlayerName = STATE.fanta.activePlayerId;
+    if (!activePlayerName) {
+        alert("Seleziona prima un giocatore.");
+        return;
+    }
+
+    const winSelect = document.getElementById(`bet-win-${matchId}`);
+    const goalsInput = document.getElementById(`bet-goals-${matchId}`);
+    if (!winSelect || !goalsInput) return;
+
+    const winner = winSelect.value;
+    const totalGoals = parseInt(goalsInput.value);
+    
+    if (isNaN(totalGoals) || totalGoals < 0) {
+        alert("Inserisci un numero di gol valido (>= 0).");
+        return;
+    }
+
+    try {
+        if (STATE.fanta.isCloud) {
+            updateDbStatus('connecting', 'Salvataggio pronostico...');
+            await mongoFetch('updateOne', {
+                filter: { name: activePlayerName },
+                update: {
+                    $set: {
+                        [`bets.${matchId}`]: {
+                            winner: winner,
+                            totalGoals: totalGoals
+                        }
+                    }
+                }
+            });
+        } else {
+            const players = getLocalPlayers();
+            const idx = players.findIndex(p => p.name === activePlayerName);
+            if (idx !== -1) {
+                if (!players[idx].bets) players[idx].bets = {};
+                players[idx].bets[matchId] = {
+                    winner: winner,
+                    totalGoals: totalGoals
+                };
+                saveLocalPlayers(players);
+            }
+        }
+        
+        // Remove editing mode for this card
+        STATE.fanta.editingMatchId = null;
+        await syncFantaData();
+    } catch(e) {
+        alert("Impossibile salvare il pronostico: " + e.message);
+        syncFantaData();
+    }
+}
+
+function setBetEditMode(matchId, isEdit) {
+    if (isEdit) {
+        STATE.fanta.editingMatchId = matchId;
+    } else {
+        STATE.fanta.editingMatchId = null;
+    }
+    renderBetsMatches();
+}
+
+function calculateMatchPoints(game, players) {
+    const actualHome = parseInt(game.home_score);
+    const actualAway = parseInt(game.away_score);
+    if (isNaN(actualHome) || isNaN(actualAway)) return {};
+
+    const actualWinner = actualHome > actualAway ? 'home' : (actualHome < actualAway ? 'away' : 'draw');
+    const actualTotal = actualHome + actualAway;
+
+    // Find players with correct winner
+    const correctPlayers = [];
+    players.forEach(p => {
+        const bet = p.bets && p.bets[game.id];
+        if (!bet) return;
+        
+        const predWinner = bet.winner;
+        const predTotal = parseInt(bet.totalGoals);
+        if (isNaN(predTotal)) return;
+
+        if (predWinner === actualWinner) {
+            correctPlayers.push({
+                player: p,
+                distance: Math.abs(predTotal - actualTotal)
+            });
+        }
+    });
+
+    // Calculate distances
+    const exactPlayers = correctPlayers.filter(cp => cp.distance === 0);
+    const nonExactPlayers = correctPlayers.filter(cp => cp.distance > 0);
+
+    // Sort non-exact players by distance
+    const uniqueNonExactDistances = [...new Set(nonExactPlayers.map(cp => cp.distance))].sort((a, b) => a - b);
+
+    const pointsMap = {};
+    
+    // All players default to 0 points for this match
+    players.forEach(p => {
+        pointsMap[p.name] = 0;
+    });
+
+    // Exact players get 6 points (3 for winner + 3 exact bonus)
+    exactPlayers.forEach(cp => {
+        pointsMap[cp.player.name] = 6;
+    });
+
+    // Non-exact players get points based on proximity
+    nonExactPlayers.forEach(cp => {
+        const rankIndex = uniqueNonExactDistances.indexOf(cp.distance);
+        if (rankIndex === 0) {
+            // 2nd closest
+            pointsMap[cp.player.name] = 5; // 3 + 2
+        } else if (rankIndex === 1) {
+            // 3rd closest
+            pointsMap[cp.player.name] = 4; // 3 + 1
+        } else {
+            // others
+            pointsMap[cp.player.name] = 3; // 3 + 0
+        }
+    });
+
+    return pointsMap;
+}
+
+function updateLeaderboard() {
+    const players = STATE.fanta.players;
+    const games = STATE.games;
+
+    const playerPoints = {};
+    players.forEach(p => {
+        playerPoints[p.name] = {
+            totalPoints: 0,
+            details: {}
+        };
+    });
+
+    // Loop through each finished match
+    games.forEach(game => {
+        const isFinished = game.finished === 'TRUE' || game.finished === true;
+        if (!isFinished) return;
+
+        const pointsMap = calculateMatchPoints(game, players);
+        Object.keys(pointsMap).forEach(name => {
+            if (playerPoints[name]) {
+                playerPoints[name].totalPoints += pointsMap[name];
+                playerPoints[name].details[game.id] = pointsMap[name];
+            }
+        });
+    });
+
+    // Update STATE.fanta.players with computed points
+    players.forEach(p => {
+        p.points = playerPoints[p.name] ? playerPoints[p.name].totalPoints : 0;
+        p.pointsDetails = playerPoints[p.name] ? playerPoints[p.name].details : {};
+    });
+
+    // Sort players by points (descending)
+    players.sort((a, b) => b.points - a.points);
+
+    renderLeaderboard();
+}
+
+function renderLeaderboard() {
+    const tbody = DOM.gameLeaderboardBody;
+    if (!tbody) return;
+
+    if (STATE.fanta.players.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="3" class="table-empty">Nessun giocatore registrato.</td>
+            </tr>
+        `;
+        return;
+    }
+
+    tbody.innerHTML = STATE.fanta.players.map((p, index) => {
+        let medal = '';
+        if (index === 0) medal = '🥇 ';
+        else if (index === 1) medal = '🥈 ';
+        else if (index === 2) medal = '🥉 ';
+
+        return `
+            <tr>
+                <td class="col-rank">${index + 1}</td>
+                <td class="col-name">${medal}${escapeHTML(p.name)}</td>
+                <td class="col-pts font-bold gold-text">${p.points}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function renderBetsMatches() {
+    const listContainer = DOM.betsMatchesList;
+    if (!listContainer) return;
+
+    const activePlayerName = STATE.fanta.activePlayerId;
+    if (!activePlayerName) {
+        listContainer.innerHTML = `
+            <div class="empty-state">
+                <svg viewBox="0 0 24 24" width="48" height="48" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="9" cy="7" r="4"></circle>
+                </svg>
+                <h4>Nessun Giocatore Selezionato</h4>
+                <p>Seleziona un giocatore dal menu in alto o creane uno nuovo per iniziare a inserire i tuoi pronostici.</p>
+            </div>
+        `;
+        return;
+    }
+
+    const player = STATE.fanta.players.find(p => p.name === activePlayerName);
+    if (!player) {
+        listContainer.innerHTML = `<p class="table-empty">Giocatore non trovato.</p>`;
+        return;
+    }
+
+    if (!STATE.games || STATE.games.length === 0) {
+        listContainer.innerHTML = `<p class="table-empty">Nessuna partita disponibile per i pronostici.</p>`;
+        return;
+    }
+
+    // Sort games chronologically
+    const sortedGames = [...STATE.games].sort((a, b) => {
+        const dateA = parseLocalDateInTimezone(a.local_date, STADIUM_TIMEZONES[a.stadium_id] || "America/New_York") || new Date(0);
+        const dateB = parseLocalDateInTimezone(b.local_date, STADIUM_TIMEZONES[b.stadium_id] || "America/New_York") || new Date(0);
+        return dateA - dateB;
+    });
+
+    listContainer.innerHTML = sortedGames.map(game => renderBetCard(game, player)).join('');
+}
+
+function renderBetCard(game, player) {
+    const isFinished = game.finished === 'TRUE' || game.finished === true;
+    const homeTeam = STATE.teamsMap[game.home_team_id];
+    const awayTeam = STATE.teamsMap[game.away_team_id];
+    const homeName = homeTeam ? homeTeam.name_en : (game.home_team_label || 'TBD');
+    const awayName = awayTeam ? awayTeam.name_en : (game.away_team_label || 'TBD');
+    const homeFlag = homeTeam ? homeTeam.flag : null;
+    const awayFlag = awayTeam ? awayTeam.flag : null;
+
+    const tz = STADIUM_TIMEZONES[game.stadium_id] || "America/New_York";
+    const startDate = parseLocalDateInTimezone(game.local_date, tz);
+    let dateStr = game.local_date;
+    if (startDate) {
+        dateStr = startDate.toLocaleString('it-IT', { 
+            day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' 
+        });
+    }
+
+    const bet = player.bets && player.bets[game.id];
+    const hasBet = !!bet;
+
+    let pointsDetailText = '';
+    let badgeClass = 'points-none';
+    let ptsEarned = 0;
+
+    if (isFinished) {
+        ptsEarned = player.pointsDetails && player.pointsDetails[game.id] !== undefined ? player.pointsDetails[game.id] : 0;
+        if (ptsEarned === 6) {
+            pointsDetailText = '+6 pt (Esatto)';
+            badgeClass = 'points-high';
+        } else if (ptsEarned === 5) {
+            pointsDetailText = '+5 pt (2° Vicino)';
+            badgeClass = 'points-med';
+        } else if (ptsEarned === 4) {
+            pointsDetailText = '+4 pt (3° Vicino)';
+            badgeClass = 'points-med';
+        } else if (ptsEarned === 3) {
+            pointsDetailText = '+3 pt (Esito)';
+            badgeClass = 'points-med';
+        } else {
+            pointsDetailText = '0 pt';
+            badgeClass = 'points-none';
+        }
+    }
+
+    const isEditing = STATE.fanta.editingMatchId === game.id || !hasBet;
+
+    let formOrSavedHTML = '';
+
+    if (isFinished) {
+        const actualHome = parseInt(game.home_score) || 0;
+        const actualAway = parseInt(game.away_score) || 0;
+        
+        let predictionInfo = '';
+        if (hasBet) {
+            let winText = '';
+            if (bet.winner === 'home') winText = homeName;
+            else if (bet.winner === 'away') winText = awayName;
+            else winText = 'Pareggio';
+            predictionInfo = `Pronostico: <strong>${winText}</strong> (${bet.totalGoals} Gol)`;
+        } else {
+            predictionInfo = `Nessun pronostico`;
+        }
+
+        formOrSavedHTML = `
+            <div class="bet-result-summary">
+                <div class="bet-info-vals">
+                    <span class="bet-lbl">${predictionInfo}</span>
+                    <span class="res-score">Risultato: ${actualHome} - ${actualAway}</span>
+                </div>
+                <span class="points-awarded-badge ${badgeClass}">${pointsDetailText}</span>
+            </div>
+        `;
+    } else {
+        if (isEditing) {
+            formOrSavedHTML = `
+                <div class="bet-card-form" id="bet-form-${game.id}">
+                    <div class="input-item">
+                        <label for="bet-win-${game.id}">Esito Vincente</label>
+                        <select id="bet-win-${game.id}">
+                            <option value="home" ${bet && bet.winner === 'home' ? 'selected' : ''}>Vittoria ${homeName}</option>
+                            <option value="draw" ${bet && bet.winner === 'draw' ? 'selected' : ''}>Pareggio</option>
+                            <option value="away" ${bet && bet.winner === 'away' ? 'selected' : ''}>Vittoria ${awayName}</option>
+                        </select>
+                    </div>
+                    <div class="input-item">
+                        <label for="bet-goals-${game.id}">Totale Gol</label>
+                        <input type="number" id="bet-goals-${game.id}" min="0" max="20" value="${bet ? bet.totalGoals : '2'}">
+                    </div>
+                    <button class="bet-card-submit-btn" onclick="savePlayerBet('${game.id}')">Salva Pronostico</button>
+                </div>
+            `;
+        } else {
+            let winText = '';
+            if (bet.winner === 'home') winText = homeName;
+            else if (bet.winner === 'away') winText = awayName;
+            else winText = 'Pareggio';
+
+            formOrSavedHTML = `
+                <div class="saved-bet-display" id="bet-saved-${game.id}">
+                    <div class="bet-info-vals">
+                        <span class="bet-lbl">Il tuo pronostico</span>
+                        <span class="bet-val"><strong>${winText}</strong> (${bet.totalGoals} Gol)</span>
+                    </div>
+                    <button class="bet-edit-btn" onclick="setBetEditMode('${game.id}', true)">Modifica</button>
+                </div>
+            `;
+        }
+    }
+
+    return `
+        <div class="bet-card ${isFinished ? 'finished' : ''}">
+            <div class="bet-card-header">
+                <span>${translateStage(game.type)} &bull; Girone ${game.group || '-'}</span>
+                <span>${dateStr}</span>
+            </div>
+            <div class="bet-card-teams">
+                <div class="bet-team-row">
+                    ${homeFlag ? `<img src="${homeFlag}" alt="" class="team-flag">` : `<div class="team-flag-placeholder">?</div>`}
+                    <span>${homeName}</span>
+                </div>
+                <div class="bet-team-row">
+                    ${awayFlag ? `<img src="${awayFlag}" alt="" class="team-flag">` : `<div class="team-flag-placeholder">?</div>`}
+                    <span>${awayName}</span>
+                </div>
+            </div>
+            ${formOrSavedHTML}
+        </div>
+    `;
+}
+
+function setupFantaMondiali() {
+    if (!DOM.dbConnStatus) return; // Prevent errors if HTML is not loaded
+
+    // DB Config Toggle
+    DOM.dbSettingsToggleBtn.addEventListener('click', () => {
+        DOM.dbConfigPanel.classList.toggle('hidden');
+    });
+
+    // Connect Button
+    DOM.dbConnectBtn.addEventListener('click', async () => {
+        const endpoint = DOM.mongoEndpoint.value.trim();
+        const apiKey = DOM.mongoApiKey.value.trim();
+        const dataSource = DOM.mongoDatasource.value.trim() || 'Cluster0';
+        const database = DOM.mongoDatabase.value.trim() || 'fantamondiali';
+
+        if (!endpoint || !apiKey) {
+            alert("Compila tutti i campi richiesti (Endpoint URL e API Key).");
+            return;
+        }
+
+        const oldConfig = { ...STATE.fanta.config };
+        const oldIsCloud = STATE.fanta.isCloud;
+
+        STATE.fanta.config = { endpoint, apiKey, dataSource, database };
+        STATE.fanta.isCloud = true;
+
+        updateDbStatus('connecting');
+
+        const ok = await testMongoConnection();
+        if (ok) {
+            localStorage.setItem('fanta_mongo_endpoint', endpoint);
+            localStorage.setItem('fanta_mongo_apikey', apiKey);
+            localStorage.setItem('fanta_mongo_datasource', dataSource);
+            localStorage.setItem('fanta_mongo_database', database);
+            DOM.dbConfigPanel.classList.add('hidden');
+            await syncFantaData();
+        } else {
+            alert("Connessione fallita. Verifica l'URL dell'endpoint e la tua API Key.");
+            STATE.fanta.config = oldConfig;
+            STATE.fanta.isCloud = oldIsCloud;
+            syncFantaData();
+        }
+    });
+
+    // Disconnect Button
+    DOM.dbDisconnectBtn.addEventListener('click', () => {
+        if (confirm("Sei sicuro di voler disconnettere MongoDB Atlas? Tornerai in modalità locale.")) {
+            localStorage.removeItem('fanta_mongo_endpoint');
+            localStorage.removeItem('fanta_mongo_apikey');
+            localStorage.removeItem('fanta_mongo_datasource');
+            localStorage.removeItem('fanta_mongo_database');
+            
+            DOM.mongoEndpoint.value = '';
+            DOM.mongoApiKey.value = '';
+            DOM.mongoDatasource.value = '';
+            DOM.mongoDatabase.value = '';
+
+            STATE.fanta.config = { endpoint: '', apiKey: '', dataSource: '', database: '' };
+            STATE.fanta.isCloud = false;
+            syncFantaData();
+        }
+    });
+
+    // Create Player
+    DOM.createPlayerBtn.addEventListener('click', handleAddPlayer);
+    DOM.createPlayerInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') handleAddPlayer();
+    });
+
+    // Active Player Select
+    DOM.activePlayerSelect.addEventListener('change', (e) => {
+        STATE.fanta.activePlayerId = e.target.value;
+        if (STATE.fanta.activePlayerId) {
+            DOM.activePlayerTag.textContent = `Giocatore: ${STATE.fanta.activePlayerId}`;
+        } else {
+            DOM.activePlayerTag.textContent = 'Seleziona un giocatore';
+        }
+        renderBetsMatches();
+    });
+
+    // Initial Load configuration
+    const savedEndpoint = localStorage.getItem('fanta_mongo_endpoint') || '';
+    const savedApiKey = localStorage.getItem('fanta_mongo_apikey') || '';
+    const savedDataSource = localStorage.getItem('fanta_mongo_datasource') || '';
+    const savedDatabase = localStorage.getItem('fanta_mongo_database') || '';
+
+    if (savedEndpoint && savedApiKey) {
+        STATE.fanta.config = {
+            endpoint: savedEndpoint,
+            apiKey: savedApiKey,
+            dataSource: savedDataSource || 'Cluster0',
+            database: savedDatabase || 'fantamondiali'
+        };
+        STATE.fanta.isCloud = true;
+        DOM.mongoEndpoint.value = STATE.fanta.config.endpoint;
+        DOM.mongoApiKey.value = STATE.fanta.config.apiKey;
+        DOM.mongoDatasource.value = STATE.fanta.config.dataSource;
+        DOM.mongoDatabase.value = STATE.fanta.config.database;
+    } else {
+        STATE.fanta.isCloud = false;
+    }
+
+    syncFantaData();
+}
+
+// Expose functions globally for HTML triggers
+window.savePlayerBet = savePlayerBet;
+window.setBetEditMode = setBetEditMode;
+window.syncFantaData = syncFantaData;

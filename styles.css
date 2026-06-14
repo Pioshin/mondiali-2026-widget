@@ -1650,3 +1650,582 @@ body {
         transform: translateX(0);
     }
 }
+
+/* FANTAMONDIALI LAYOUT & SIDEBAR */
+.scommesse-layout {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 20px;
+    align-items: start;
+}
+
+@media (max-width: 900px) {
+    .scommesse-layout {
+        grid-template-columns: 1fr;
+    }
+}
+
+.scommesse-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* DATABASE CONFIGURATION CARD */
+.db-status-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.db-status-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.db-badge {
+    background: rgba(15, 23, 42, 0.4);
+    border: 1px solid var(--panel-border);
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-heading);
+}
+
+.db-badge.connected {
+    color: var(--primary-green);
+    border-color: rgba(16, 185, 129, 0.3);
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.1);
+}
+
+.db-settings-toggle-btn {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--panel-border);
+    color: var(--text-muted);
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.db-settings-toggle-btn:hover {
+    color: var(--text-main);
+    background: rgba(255,255,255,0.1);
+    border-color: rgba(255,255,255,0.2);
+}
+
+.db-explanation {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    line-height: 1.4;
+}
+
+.db-config-panel {
+    margin-top: 12px;
+    border-top: 1px dashed rgba(255,255,255,0.08);
+    padding-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.db-config-panel h4 {
+    font-family: var(--font-heading);
+    font-size: 0.85rem;
+    color: var(--accent-gold);
+    margin-bottom: 4px;
+}
+
+.input-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.input-item label {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.input-item input {
+    background: rgba(15, 23, 42, 0.7);
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    color: var(--text-main);
+    font-size: 0.8rem;
+    outline: none;
+}
+
+.input-item input:focus {
+    border-color: var(--accent-gold);
+}
+
+.input-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.config-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.db-btn-connect, .db-btn-disconnect {
+    flex: 1;
+    border: none;
+    outline: none;
+    padding: 8px;
+    border-radius: 6px;
+    font-family: var(--font-heading);
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.db-btn-connect {
+    background: var(--primary-green);
+    color: #ffffff;
+}
+
+.db-btn-connect:hover {
+    background: #059669;
+}
+
+.db-btn-disconnect {
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--danger-red);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.db-btn-disconnect:hover {
+    background: rgba(239, 68, 68, 0.2);
+}
+
+/* LEADERBOARD TABLE */
+.leaderboard-card h3 {
+    font-family: var(--font-heading);
+    font-size: 1.1rem;
+    color: #ffffff;
+    border-bottom: 2px solid rgba(255,255,255,0.05);
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+}
+
+.leaderboard-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.leaderboard-table th {
+    color: var(--text-muted);
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 8px 4px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+
+.leaderboard-table td {
+    padding: 10px 4px;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    font-size: 0.85rem;
+}
+
+.leaderboard-table tr:last-child td {
+    border-bottom: none;
+}
+
+.leaderboard-table .col-rank {
+    width: 36px;
+    text-align: center;
+    font-weight: 700;
+    color: var(--text-muted);
+}
+
+/* Medal icons for top 3 */
+.leaderboard-table tr:nth-child(1) .col-rank {
+    color: var(--accent-gold);
+    font-size: 1.1rem;
+}
+.leaderboard-table tr:nth-child(2) .col-rank {
+    color: #94a3b8;
+    font-size: 1.1rem;
+}
+.leaderboard-table tr:nth-child(3) .col-rank {
+    color: #b45309;
+    font-size: 1.1rem;
+}
+
+.leaderboard-table .col-name {
+    font-weight: 600;
+    color: #ffffff;
+}
+
+.leaderboard-table .col-pts {
+    width: 50px;
+    text-align: center;
+    font-weight: 800;
+    color: var(--accent-gold);
+}
+
+.table-empty {
+    text-align: center;
+    color: var(--text-muted);
+    font-style: italic;
+    padding: 20px 0 !important;
+}
+
+/* PLAYER MANAGER CARD */
+.player-manager-header {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.player-select-wrapper {
+    flex: 2;
+    min-width: 200px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.player-select-wrapper label, .player-create-wrapper label {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    letter-spacing: 0.5px;
+}
+
+.player-select-wrapper select {
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: #ffffff;
+    font-family: var(--font-body);
+    font-size: 0.9rem;
+    font-weight: 600;
+    outline: none;
+    cursor: pointer;
+}
+
+.player-divider {
+    font-family: var(--font-heading);
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    margin-top: 15px;
+}
+
+.player-create-wrapper {
+    flex: 3;
+    min-width: 260px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.player-create-wrapper .input-group {
+    display: flex;
+    gap: 6px;
+}
+
+.player-create-wrapper input {
+    flex: 1;
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: #ffffff;
+    font-family: var(--font-body);
+    font-size: 0.9rem;
+    outline: none;
+}
+
+.player-create-wrapper input:focus {
+    border-color: var(--accent-gold);
+}
+
+.player-create-wrapper button {
+    background: rgba(251, 191, 36, 0.1);
+    border: 1px solid rgba(251, 191, 36, 0.3);
+    color: var(--accent-gold);
+    border-radius: 8px;
+    padding: 0 16px;
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.player-create-wrapper button:hover {
+    background: rgba(251, 191, 36, 0.2);
+    border-color: var(--accent-gold);
+}
+
+/* BETS AREA CONTAINER */
+.bets-area-container {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.bets-area-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 2px solid rgba(255,255,255,0.05);
+    padding-bottom: 8px;
+    margin-top: 8px;
+}
+
+.bets-area-header h3 {
+    font-family: var(--font-heading);
+    font-size: 1.2rem;
+    color: #ffffff;
+}
+
+.active-player-tag {
+    font-family: var(--font-heading);
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--accent-gold);
+    background: rgba(251, 191, 36, 0.08);
+    border: 1px solid rgba(251, 191, 36, 0.2);
+    padding: 4px 10px;
+    border-radius: 20px;
+}
+
+.bets-matches-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 16px;
+}
+
+/* BETTING FORM CARD */
+.bet-card {
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    position: relative;
+}
+
+.bet-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    padding-bottom: 8px;
+}
+
+.bet-card-teams {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.bet-team-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+    font-size: 0.85rem;
+}
+
+.bet-card-form {
+    display: grid;
+    grid-template-columns: 1.8fr 1fr;
+    gap: 8px;
+    align-items: end;
+    border-top: 1px solid rgba(255,255,255,0.04);
+    padding-top: 12px;
+}
+
+.bet-card-form label {
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    display: block;
+    margin-bottom: 4px;
+}
+
+.bet-card-form select, .bet-card-form input {
+    width: 100%;
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    padding: 8px;
+    color: #ffffff;
+    font-size: 0.8rem;
+    outline: none;
+}
+
+.bet-card-form select:focus, .bet-card-form input:focus {
+    border-color: var(--accent-gold);
+}
+
+.bet-card-submit-btn {
+    grid-column: 1 / -1;
+    background: linear-gradient(135deg, var(--accent-gold) 0%, #d97706 100%);
+    color: #030712;
+    border: none;
+    outline: none;
+    border-radius: 6px;
+    padding: 8px;
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: 0.8rem;
+    cursor: pointer;
+    margin-top: 4px;
+    transition: all 0.2s;
+}
+
+.bet-card-submit-btn:hover {
+    box-shadow: 0 0 10px rgba(251, 191, 36, 0.3);
+    transform: translateY(-1px);
+}
+
+/* SAVED BET DISPLAY */
+.saved-bet-display {
+    background: rgba(15, 23, 42, 0.4);
+    border: 1px solid rgba(255,255,255,0.03);
+    border-radius: 8px;
+    padding: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px solid rgba(255,255,255,0.04);
+    padding-top: 12px;
+    margin-top: 4px;
+}
+
+.bet-info-vals {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.bet-lbl {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    font-weight: 700;
+}
+
+.bet-val {
+    font-size: 0.8rem;
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.bet-val strong {
+    color: var(--accent-gold);
+}
+
+.bet-edit-btn {
+    background: transparent;
+    border: 1px solid var(--panel-border);
+    color: var(--text-muted);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.bet-edit-btn:hover {
+    color: #ffffff;
+    border-color: rgba(255,255,255,0.2);
+    background: rgba(255,255,255,0.03);
+}
+
+/* FINISHED BET CARD (SCORING) */
+.bet-card.finished {
+    border-color: rgba(255,255,255,0.05);
+    background: rgba(17, 24, 39, 0.3);
+}
+
+.bet-result-summary {
+    background: rgba(15, 23, 42, 0.5);
+    border-radius: 8px;
+    padding: 8px 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.75rem;
+    border-top: 1px solid rgba(255,255,255,0.04);
+    padding-top: 12px;
+}
+
+.res-score {
+    font-weight: 700;
+    color: #ffffff;
+}
+
+.points-awarded-badge {
+    font-family: var(--font-heading);
+    font-size: 0.75rem;
+    font-weight: 800;
+    padding: 3px 8px;
+    border-radius: 20px;
+    border: 1px solid transparent;
+}
+
+.points-awarded-badge.points-high {
+    background: rgba(16, 185, 129, 0.08);
+    color: var(--primary-green);
+    border-color: rgba(16, 185, 129, 0.2);
+}
+
+.points-awarded-badge.points-med {
+    background: rgba(251, 191, 36, 0.08);
+    color: var(--accent-gold);
+    border-color: rgba(251, 191, 36, 0.2);
+}
+
+.points-awarded-badge.points-none {
+    background: rgba(239, 68, 68, 0.05);
+    color: var(--danger-red);
+    border-color: rgba(239, 68, 68, 0.15);
+}
+
+/* Tab button Gold highlight specifically */
+.tab-btn.highlight-gold {
+    color: var(--accent-gold);
+    border: 1px solid rgba(251, 191, 36, 0.15);
+}
+
+.tab-btn.highlight-gold.active {
+    background: rgba(251, 191, 36, 0.08);
+    border: 1px solid rgba(251, 191, 36, 0.35);
+    box-shadow: 0 4px 15px rgba(251, 191, 36, 0.1);
+}
+
