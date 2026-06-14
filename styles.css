@@ -2580,4 +2580,518 @@ body {
     font-style: italic;
 }
 
+/* ==========================================
+   MATCH DETAILS MODAL & SOCCER PITCH STYLES
+   ========================================== */
+
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(3, 7, 18, 0.82);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    z-index: 1000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.modal-overlay.active {
+    display: flex;
+    animation: modalFadeIn 0.3s ease;
+}
+
+.modal-content {
+    background: rgba(17, 24, 39, 0.9);
+    border: 1px solid var(--panel-border);
+    border-radius: 20px;
+    width: 100%;
+    max-width: 900px;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+    padding: 30px;
+    box-shadow: 0 10px 45px rgba(0, 0, 0, 0.6), 0 0 30px rgba(251, 191, 36, 0.08);
+    animation: modalSlideUp 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes modalFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes modalSlideUp {
+    from { transform: translateY(40px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+.modal-close {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: none;
+    border: none;
+    font-size: 2.2rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    line-height: 1;
+    transition: color 0.2s;
+    z-index: 1100;
+}
+
+.modal-close:hover {
+    color: var(--danger-red);
+}
+
+/* Modal Internal Layout */
+.modal-match-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 25px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.modal-match-header .team-header-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 35%;
+    text-align: center;
+}
+
+.modal-match-header .team-header-block .modal-team-flag {
+    width: 60px;
+    height: 40px;
+    object-fit: cover;
+    border-radius: 6px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    border: 1.5px solid rgba(255, 255, 255, 0.1);
+    margin-bottom: 8px;
+}
+
+.modal-match-header .team-header-block .modal-team-name {
+    font-family: var(--font-heading);
+    font-size: 1.1rem;
+    font-weight: 800;
+}
+
+.modal-match-header .score-header-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 30%;
+}
+
+.modal-match-header .score-header-block .modal-score-display {
+    font-family: var(--font-heading);
+    font-size: 2.5rem;
+    font-weight: 900;
+    color: var(--text-main);
+    letter-spacing: 2px;
+    text-shadow: 0 0 15px rgba(255, 255, 255, 0.15);
+}
+
+.modal-match-header .score-header-block .modal-status-badge {
+    font-size: 0.75rem;
+    font-weight: 800;
+    padding: 3px 10px;
+    border-radius: 20px;
+    margin-top: 5px;
+    text-transform: uppercase;
+}
+
+.modal-match-header .score-header-block .modal-status-badge.live {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--primary-green);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    animation: livePulse 2s infinite ease-in-out;
+}
+
+.modal-match-header .score-header-block .modal-status-badge.finished {
+    background: rgba(156, 163, 175, 0.08);
+    color: var(--text-muted);
+    border: 1px solid rgba(156, 163, 175, 0.15);
+}
+
+.modal-match-header .score-header-block .modal-status-badge.upcoming {
+    background: rgba(251, 191, 36, 0.08);
+    color: var(--accent-gold);
+    border: 1px solid rgba(251, 191, 36, 0.2);
+}
+
+.modal-sub-nav {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    margin-bottom: 25px;
+}
+
+.modal-sub-btn {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--panel-border);
+    color: var(--text-muted);
+    padding: 8px 18px;
+    border-radius: 30px;
+    font-family: var(--font-heading);
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.modal-sub-btn:hover {
+    color: var(--text-main);
+    background: rgba(255, 255, 255, 0.07);
+}
+
+.modal-sub-btn.active {
+    color: #030712;
+    background: var(--accent-gold);
+    border-color: var(--accent-gold);
+    box-shadow: 0 4px 15px var(--accent-gold-glow);
+}
+
+.modal-pane {
+    display: none;
+    animation: fadeIn 0.3s ease;
+}
+
+.modal-pane.active {
+    display: block;
+}
+
+/* Stadium & Events Info View */
+.stadium-info-card {
+    background: rgba(15, 23, 42, 0.4);
+    border: 1px solid var(--panel-border);
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 20px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+}
+
+.stadium-info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.stadium-info-item .label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.stadium-info-item .value {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+.modal-match-events {
+    background: rgba(15, 23, 42, 0.3);
+    border-radius: 12px;
+    border: 1px solid var(--panel-border);
+    padding: 20px;
+}
+
+.modal-events-title {
+    font-family: var(--font-heading);
+    font-size: 1rem;
+    font-weight: 800;
+    color: var(--accent-gold);
+    margin-bottom: 15px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    padding-bottom: 6px;
+}
+
+.modal-events-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.modal-event-row {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    font-size: 0.85rem;
+    padding: 6px 10px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.modal-event-time {
+    font-weight: 800;
+    color: var(--accent-gold);
+    min-width: 35px;
+    text-align: right;
+}
+
+.modal-event-icon {
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-event-detail {
+    flex: 1;
+    color: var(--text-main);
+}
+
+/* TACTICAL FIELD VIEW */
+.tactical-pitch-container {
+    display: flex;
+    gap: 30px;
+    justify-content: center;
+    margin-top: 10px;
+}
+
+.tactical-pitch-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    max-width: 380px;
+}
+
+.tactical-pitch-title {
+    font-family: var(--font-heading);
+    font-size: 0.9rem;
+    font-weight: 800;
+    color: var(--text-main);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.tactical-pitch-title .team-formation {
+    font-size: 0.75rem;
+    background: rgba(255,255,255,0.08);
+    padding: 2px 8px;
+    border-radius: 20px;
+    color: var(--accent-gold);
+}
+
+.tactical-pitch {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 0.72;
+    background: linear-gradient(180deg, #115e59 0%, #0f766e 100%);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 6px 25px rgba(0, 0, 0, 0.45);
+}
+
+/* Pitch markings */
+.pitch-line-center {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background: rgba(255, 255, 255, 0.16);
+    transform: translateY(-50%);
+}
+
+.pitch-line-circle {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 75px;
+    height: 75px;
+    border: 2px solid rgba(255, 255, 255, 0.16);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.pitch-line-penalty-home {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 55%;
+    height: 16%;
+    border: 2px solid rgba(255, 255, 255, 0.16);
+    border-top: none;
+    transform: translateX(-50%);
+}
+
+.pitch-line-penalty-away {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    width: 55%;
+    height: 16%;
+    border: 2px solid rgba(255, 255, 255, 0.16);
+    border-bottom: none;
+    transform: translateX(-50%);
+}
+
+.pitch-line-goal-home {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 25%;
+    height: 6%;
+    border: 2px solid rgba(255, 255, 255, 0.16);
+    border-top: none;
+    transform: translateX(-50%);
+}
+
+.pitch-line-goal-away {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    width: 25%;
+    height: 6%;
+    border: 2px solid rgba(255, 255, 255, 0.16);
+    border-bottom: none;
+    transform: translateX(-50%);
+}
+
+/* Player Nodes on Pitch */
+.player-node {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    z-index: 5;
+}
+
+.player-jersey {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    font-weight: 800;
+    font-size: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #ffffff;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4);
+    transition: transform 0.2s ease;
+}
+
+.player-jersey.home-jersey {
+    background: var(--accent-gold);
+    color: #030712;
+    border-color: #ffffff;
+}
+
+.player-jersey.away-jersey {
+    background: var(--primary-green);
+    color: #ffffff;
+    border-color: #ffffff;
+}
+
+.player-node:hover .player-jersey {
+    transform: scale(1.15);
+}
+
+.player-name {
+    font-size: 0.65rem;
+    color: #ffffff;
+    font-weight: 600;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9), 0 0 3px rgba(0, 0, 0, 0.9);
+    margin-top: 4px;
+    text-align: center;
+    white-space: nowrap;
+    max-width: 75px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Toggle switch for pitches on mobile */
+.pitch-toggle-bar {
+    display: none;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--panel-border);
+    border-radius: 30px;
+    padding: 3px;
+    margin-bottom: 20px;
+    width: 100%;
+    max-width: 320px;
+}
+
+.pitch-toggle-btn {
+    flex: 1;
+    background: none;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 20px;
+    color: var(--text-muted);
+    font-family: var(--font-heading);
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: center;
+}
+
+.pitch-toggle-btn.active {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-main);
+}
+
+.pitch-disclaimer {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    margin-top: 25px;
+    font-style: italic;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    padding-top: 15px;
+}
+
+/* RESPONSIVE DESIGN RULES FOR MODAL */
+@media (max-width: 768px) {
+    .modal-content {
+        padding: 20px 15px;
+    }
+    
+    .modal-match-header .team-header-block .modal-team-name {
+        font-size: 0.95rem;
+    }
+    
+    .modal-match-header .score-header-block .modal-score-display {
+        font-size: 2rem;
+    }
+    
+    .tactical-pitch-container {
+        flex-direction: column;
+        align-items: center;
+        gap: 0;
+    }
+    
+    .pitch-toggle-bar {
+        display: flex;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    
+    .tactical-pitch-wrapper {
+        display: none;
+    }
+    
+    .tactical-pitch-wrapper.active {
+        display: flex;
+    }
+}
+
+
 

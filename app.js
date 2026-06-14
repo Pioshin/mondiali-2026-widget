@@ -583,6 +583,7 @@ function renderMatchesGrid() {
 
         const card = document.createElement('div');
         card.className = `match-card ${isLive && !finishedVal ? 'live' : ''}`;
+        card.setAttribute('data-game-id', game.id);
         
         const stadium = STATE.stadiumsMap[game.stadium_id];
         const stadiumName = stadium ? (stadium.name_en || stadium.name) : `Stadium ${game.stadium_id}`;
@@ -2350,7 +2351,7 @@ function renderBracketMatchCard(game) {
     }
 
     return `
-        <div class="bracket-match-card ${isLive ? 'live' : ''} ${finishedVal ? 'finished' : ''}">
+        <div class="bracket-match-card ${isLive ? 'live' : ''} ${finishedVal ? 'finished' : ''}" data-game-id="${game.id}">
             <div class="bracket-match-header">
                 <span class="match-badge ${statusClass}">${statusText}</span>
                 <span class="match-num">Match ${game.id}</span>
@@ -2376,4 +2377,660 @@ function renderBracketMatchCard(game) {
 }
 
 window.renderBracket = renderBracket;
+
+// ==========================================
+// SQUAD DATABASE & DETERMINISTIC LINEUP GENERATOR
+// ==========================================
+
+const FORMATION_COORDS = {
+    "4-3-3": [
+        [50, 90], // GK
+        [85, 72], // RB
+        [60, 75], // RCB
+        [40, 75], // LCB
+        [15, 72], // LB
+        [70, 48], // RCM
+        [50, 56], // DM
+        [30, 48], // LCM
+        [80, 22], // RW
+        [50, 16], // ST
+        [20, 22]  // LW
+    ],
+    "4-4-2": [
+        [50, 90], // GK
+        [85, 72], // RB
+        [60, 75], // RCB
+        [40, 75], // LCB
+        [15, 72], // LB
+        [82, 48], // RM
+        [60, 52], // RCM
+        [40, 52], // LCM
+        [18, 48], // LM
+        [60, 18], // RS
+        [40, 18]  // LS
+    ],
+    "3-5-2": [
+        [50, 90], // GK
+        [70, 75], // RCB
+        [50, 78], // CB
+        [30, 75], // LCB
+        [85, 52], // RWB
+        [65, 48], // RCM
+        [50, 58], // DM
+        [35, 48], // LCM
+        [15, 52], // LWB
+        [60, 18], // RS
+        [40, 18]  // LS
+    ],
+    "4-2-3-1": [
+        [50, 90], // GK
+        [85, 72], // RB
+        [60, 75], // RCB
+        [40, 75], // LCB
+        [15, 72], // LB
+        [62, 58], // RDM
+        [38, 58], // LDM
+        [75, 36], // RAM
+        [50, 38], // AM
+        [25, 36], // LAM
+        [50, 16]  // ST
+    ],
+    "5-3-2": [
+        [50, 90], // GK
+        [86, 68], // RWB
+        [65, 76], // RCB
+        [50, 78], // CB
+        [35, 76], // LCB
+        [14, 68], // LWB
+        [70, 48], // RCM
+        [50, 54], // DM
+        [30, 48], // LCM
+        [60, 18], // RS
+        [40, 18]  // LS
+    ]
+};
+
+const SQUADS_DB = {
+    "1": [ // Mexico
+        ["Ochoa", "GK"], ["Montes", "D"], ["Vázquez", "D"], ["Sánchez", "D"], ["Gallardo", "D"],
+        ["Álvarez", "M"], ["Chávez", "M"], ["Pineda", "M"], ["Sánchez", "M"], ["Lozano", "F"],
+        ["Giménez", "F"], ["Malagón", "GK"], ["Araujo", "D"], ["Romo", "M"], ["Quiñones", "F"],
+        ["Antuna", "F"], ["Martín", "F"]
+    ],
+    "2": [ // South Africa
+        ["Williams", "GK"], ["Mudau", "D"], ["Kekana", "D"], ["Mvuala", "D"], ["Modiba", "D"],
+        ["Mokoena", "M"], ["Sithole", "M"], ["Zwane", "M"], ["Tau", "F"], ["Morena", "F"],
+        ["Makgopa", "F"], ["Goss", "GK"], ["Sibisi", "D"], ["Monare", "M"], ["Mayambela", "F"]
+    ],
+    "3": [ // South Korea
+        ["Jo Hyeon-woo", "GK"], ["Kim Min-jae", "D"], ["Kim Young-gwon", "D"], ["Seol Young-woo", "D"], ["Kim Jin-su", "D"],
+        ["Hwang In-beom", "M"], ["Park Yong-woo", "M"], ["Lee Jae-sung", "M"], ["Lee Kang-in", "F"], ["Son Heung-min", "F"],
+        ["Hwang Hee-chan", "F"], ["Song Bum-keun", "GK"], ["Jung Seung-hyun", "D"], ["Hong Hyun-seok", "M"], ["Cho Gue-sung", "F"]
+    ],
+    "4": [ // Czech Republic
+        ["Staněk", "GK"], ["Holeš", "D"], ["Hranáč", "D"], ["Krejčí", "D"], ["Coufal", "D"],
+        ["Souček", "M"], ["Provod", "M"], ["Barák", "M"], ["Douděra", "M"], ["Schick", "F"],
+        ["Kuchta", "F"], ["Kovář", "GK"], ["Zima", "D"], ["Sadílek", "M"], ["Hložek", "F"]
+    ],
+    "5": [ // Canada
+        ["Crépeau", "GK"], ["Johnston", "D"], ["Miller", "D"], ["Bombito", "D"], ["Davies", "D"],
+        ["Kone", "M"], ["Eustáquio", "M"], ["Buchanan", "M"], ["Millar", "M"], ["David", "F"],
+        ["Larin", "F"], ["St. Clair", "GK"], ["Laryea", "D"], ["Osorio", "M"], ["Brym", "F"]
+    ],
+    "6": [ // Bosnia and Herzegovina
+        ["Vasilj", "GK"], ["Ahmedhodžić", "D"], ["Hadžikadunić", "D"], ["Kolašinac", "D"], ["Gazibegović", "D"],
+        ["Krunić", "M"], ["Tahirović", "M"], ["Hajradinović", "M"], ["Demirović", "F"], ["Džeko", "F"],
+        ["Tabaković", "F"], ["Pirić", "GK"], ["Radeljić", "D"], ["Bašić", "M"], ["Varešanović", "F"]
+    ],
+    "7": [ // Qatar
+        ["Barsham", "GK"], ["Mendes", "D"], ["Khoder", "D"], ["Mukhtar", "D"], ["Waad", "D"],
+        ["Fathy", "M"], ["Gaber", "M"], ["Al-Haydos", "M"], ["Afif", "F"], ["Ali", "F"],
+        ["Abdurisag", "F"], ["Al-Sheeb", "GK"], ["Salman", "D"], ["Hatkem", "M"], ["Alaaeldin", "F"]
+    ],
+    "8": [ // Switzerland
+        ["Sommer", "GK"], ["Akanji", "D"], ["Schär", "D"], ["Rodriguez", "D"], ["Widmer", "D"],
+        ["Xhaka", "M"], ["Freuler", "M"], ["Zakaria", "M"], ["Shaqiri", "F"], ["Embolo", "F"],
+        ["Vargas", "F"], ["Kobel", "GK"], ["Elvedi", "D"], ["Sow", "M"], ["Amdouni", "F"],
+        ["Okafor", "F"], ["Ndoye", "F"]
+    ],
+    "9": [ // Brazil
+        ["Alisson", "GK"], ["Marquinhos", "D"], ["Militão", "D"], ["Danilo", "D"], ["Arana", "D"],
+        ["Guimarães", "M"], ["Gomes", "M"], ["Paquetá", "M"], ["Rodrygo", "F"], ["Vinícius Jr", "F"],
+        ["Endrick", "F"], ["Ederson", "GK"], ["Bremer", "D"], ["Beraldo", "D"], ["Douglas Luiz", "M"],
+        ["Raphinha", "F"], ["Martinelli", "F"], ["Savinho", "F"]
+    ],
+    "10": [ // Morocco
+        ["Bounou", "GK"], ["Hakimi", "D"], ["Aguerd", "D"], ["Saïss", "D"], ["Mazraoui", "D"],
+        ["Amrabat", "M"], ["Ounahi", "M"], ["Ziyech", "M"], ["Díaz", "M"], ["En-Nesyri", "F"],
+        ["Adli", "F"], ["El Kajoui", "GK"], ["Chibi", "D"], ["Richardson", "M"], ["El Kaabi", "F"],
+        ["Rahimi", "F"]
+    ],
+    "13": [ // USA
+        ["Turner", "GK"], ["Dest", "D"], ["Richards", "D"], ["Ream", "D"], ["Robinson", "D"],
+        ["Adams", "M"], ["McKennie", "M"], ["Musah", "M"], ["Reyna", "M"], ["Pulisic", "F"],
+        ["Balogun", "F"], ["Horvath", "GK"], ["Carter-Vickers", "D"], ["Cardoso", "M"], ["Weah", "F"],
+        ["Pepi", "F"], ["Wright", "F"]
+    ],
+    "15": [ // Australia
+        ["Ryan", "GK"], ["Souttar", "D"], ["Rowles", "D"], ["Atkinson", "D"], ["Behich", "D"],
+        ["Irvine", "M"], ["Metcalfe", "M"], ["McGree", "M"], ["Boyle", "F"], ["Duke", "F"],
+        ["Goodwin", "F"], ["Gauci", "GK"], ["Burgess", "D"], ["Baccus", "M"], ["Irankunda", "F"]
+    ],
+    "16": [ // Turkey
+        ["Günok", "GK"], ["Demiral", "D"], ["Bardakcı", "D"], ["Müldür", "D"], ["Kadıoğlu", "D"],
+        ["Çalhanoğlu", "M"], ["Özcan", "M"], ["Kökçü", "M"], ["Güler", "M"], ["Yılmaz", "F"],
+        ["Yıldız", "F"], ["Çakır", "GK"], ["Çelik", "D"], ["Yazıcı", "M"], ["Aktürkoğlu", "F"]
+    ],
+    "17": [ // Germany
+        ["Ter Stegen", "GK"], ["Rüdiger", "D"], ["Tah", "D"], ["Kimmich", "D"], ["Mittelstädt", "D"],
+        ["Andrich", "M"], ["Kroos", "M"], ["Gündoğan", "M"], ["Musiala", "F"], ["Wirtz", "F"],
+        ["Havertz", "F"], ["Neuer", "GK"], ["Schlotterbeck", "D"], ["Gross", "M"], ["Sané", "F"],
+        ["Füllkrug", "F"], ["Undav", "F"]
+    ],
+    "20": [ // Ecuador
+        ["Domínguez", "GK"], ["Hincapié", "D"], ["Pacho", "D"], ["Torres", "D"], ["Preciado", "D"],
+        ["Caicedo", "M"], ["Gruezo", "M"], ["Páez", "M"], ["Ortiz", "M"], ["Valencia", "F"],
+        ["Sarmiento", "F"], ["Ramírez", "GK"], ["Arboleda", "D"], ["Franco", "M"], ["Rodriguez", "F"]
+    ],
+    "21": [ // Netherlands
+        ["Verbruggen", "GK"], ["Van Dijk", "D"], ["De Vrij", "D"], ["Dumfries", "D"], ["Aké", "D"],
+        ["Schouten", "M"], ["Reijnders", "M"], ["Simons", "M"], ["Frimpong", "M"], ["Depay", "F"],
+        ["Gakpo", "F"], ["Bijlow", "GK"], ["De Ligt", "D"], ["Van de Ven", "D"], ["Wijnaldum", "M"],
+        ["Weghorst", "F"], ["Malen", "F"]
+    ],
+    "22": [ // Japan
+        ["Suzuki", "GK"], ["Itakura", "D"], ["Taniguchi", "D"], ["Machida", "D"], ["Sugawara", "D"],
+        ["Endo", "M"], ["Morita", "M"], ["Kubo", "M"], ["Minamino", "M"], ["Doan", "F"],
+        ["Ueda", "F"], ["Maekawa", "GK"], ["Tomiyasu", "D"], ["Kamada", "M"], ["Mitoma", "F"],
+        ["Maeda", "F"], ["Asano", "F"]
+    ],
+    "25": [ // Belgium
+        ["Casteels", "GK"], ["Faes", "D"], ["Vertonghen", "D"], ["Castagne", "D"], ["Theate", "D"],
+        ["Onana", "M"], ["Mangala", "M"], ["De Bruyne", "M"], ["Trossard", "F"], ["Doku", "F"],
+        ["Lukaku", "F"], ["Kaminski", "GK"], ["Debast", "D"], ["Tielemans", "M"], ["Bakayoko", "F"],
+        ["Carrasco", "F"], ["Openda", "F"]
+    ],
+    "26": [ // Egypt
+        ["El Shenawy", "GK"], ["Hegazi", "D"], ["Abdelmonem", "D"], ["Hany", "D"], ["Hamdi", "D"],
+        ["Elneny", "M"], ["Fathi", "M"], ["Ashour", "M"], ["Salah", "F"], ["Marmoush", "F"],
+        ["Mostafa", "F"], ["Abou Gabal", "GK"], ["Gababr", "D"], ["Trezeguet", "F"], ["Sherif", "F"]
+    ],
+    "29": [ // Spain
+        ["Unai Simón", "GK"], ["Le Normand", "D"], ["Laporte", "D"], ["Carvajal", "D"], ["Cucurella", "D"],
+        ["Rodri", "M"], ["Fabián Ruiz", "M"], ["Pedri", "M"], ["Yamal", "F"], ["Nico Williams", "F"],
+        ["Morata", "F"], ["Raya", "GK"], ["Vivian", "D"], ["Grimaldo", "D"], ["Zubimendi", "M"],
+        ["Dani Olmo", "M"], ["Merino", "M"], ["Joselu", "F"], ["Oyarzabal", "F"]
+    ],
+    "32": [ // Uruguay
+        ["Rochet", "GK"], ["Araújo", "D"], ["Giménez", "D"], ["Nández", "D"], ["Olivera", "D"],
+        ["Valverde", "M"], ["Ugarte", "M"], ["Bentancur", "M"], ["Pellistri", "F"], ["Araújo", "F"],
+        ["Núñez", "F"], ["Mele", "GK"], ["Cáceres", "D"], ["De la Cruz", "M"], ["Suárez", "F"],
+        ["Rodríguez", "F"]
+    ],
+    "33": [ // France
+        ["Maignan", "GK"], ["Saliba", "D"], ["Upamecano", "D"], ["Koundé", "D"], ["Theo Hernández", "D"],
+        ["Kanté", "M"], ["Tchouaméni", "M"], ["Rabiot", "M"], ["Dembélé", "F"], ["Mbappé", "F"],
+        ["Barcola", "F"], ["Samba", "GK"], ["Konaté", "D"], ["Mendy", "D"], ["Camavinga", "M"],
+        ["Griezmann", "M"], ["Fofana", "M"], ["Giroud", "F"], ["Thuram", "F"], ["Coman", "F"]
+    ],
+    "34": [ // Senegal
+        ["Mendy", "GK"], ["Koulibaly", "D"], ["Diallo", "D"], ["Sabaly", "D"], ["Jakobs", "D"],
+        ["Gueye", "M"], ["Kouyaté", "M"], ["Camara", "M"], ["Mané", "F"], ["Sarr", "F"],
+        ["Jackson", "F"], ["Gomis", "GK"], ["Seck", "D"], ["Ciss", "M"], ["Ndiaye", "F"]
+    ],
+    "36": [ // Norway
+        ["Nyland", "GK"], ["Ajer", "D"], ["Østigård", "D"], ["Ryerson", "D"], ["Wolfe", "D"],
+        ["Berge", "M"], ["Thorsby", "M"], ["Ødegaard", "M"], ["Bobb", "F"], ["Haaland", "F"],
+        ["Sørloth", "F"], ["Dyngeland", "GK"], ["Hanche-Olsen", "D"], ["Patrick Berg", "M"], ["Nusa", "F"]
+    ],
+    "37": [ // Argentina
+        ["E. Martínez", "GK"], ["Romero", "D"], ["Otamendi", "D"], ["Molina", "D"], ["Tagliafico", "D"],
+        ["De Paul", "M"], ["Fernández", "M"], ["Mac Allister", "M"], ["Messi", "F"], ["J. Álvarez", "F"],
+        ["L. Martínez", "F"], ["Armani", "GK"], ["L. Martínez", "D"], ["Montiel", "D"], ["Paredes", "M"],
+        ["Lo Celso", "M"], ["Di María", "F"], ["Garnacho", "F"], ["N. González", "F"]
+    ],
+    "41": [ // Portugal
+        ["Diogo Costa", "GK"], ["Rúben Dias", "D"], ["Pepe", "D"], ["Cancelo", "D"], ["Nuno Mendes", "D"],
+        ["Palhinha", "M"], ["Vitinha", "M"], ["Bruno Fernandes", "M"], ["Bernardo Silva", "F"], ["Cristiano Ronaldo", "F"],
+        ["Rafael Leão", "F"], ["José Sá", "GK"], ["Antonio Silva", "D"], ["Dalot", "D"], ["Neves", "M"],
+        ["Otávio", "M"], ["Félix", "F"], ["Jota", "F"], ["Conceição", "F"]
+    ],
+    "44": [ // Colombia
+        ["Vargas", "GK"], ["Cuesta", "D"], ["Sánchez", "D"], ["Muñoz", "D"], ["Mojica", "D"],
+        ["Lerma", "M"], ["Ríos", "M"], ["James Rodríguez", "M"], ["Arias", "F"], ["Luis Díaz", "F"],
+        ["Borré", "F"], ["Ospina", "GK"], ["Mina", "D"], ["Uribe", "M"], ["Sinisterra", "F"],
+        ["Durán", "F"]
+    ],
+    "45": [ // England
+        ["Pickford", "GK"], ["Stones", "D"], ["Guéhi", "D"], ["Walker", "D"], ["Trippier", "D"],
+        ["Rice", "M"], ["Mainoo", "M"], ["Bellingham", "M"], ["Saka", "F"], ["Kane", "F"],
+        ["Foden", "F"], ["Ramsdale", "GK"], ["Konsa", "D"], ["Alexander-Arnold", "D"], ["Gallagher", "M"],
+        ["Palmer", "F"], ["Watkins", "F"], ["Toney", "F"], ["Gordon", "F"]
+    ],
+    "46": [ // Croatia
+        ["Livaković", "GK"], ["Šutalo", "D"], ["Pongračić", "D"], ["Stanišić", "D"], ["Gvardiol", "D"],
+        ["Modrić", "M"], ["Kovačić", "M"], ["Brozović", "M"], ["Majer", "F"], ["Kramarić", "F"],
+        ["Budimir", "F"], ["Ivušić", "GK"], ["Erlić", "D"], ["Pašalić", "M"], ["Perišić", "F"]
+    ]
+};
+
+const REGIONAL_SURNAMES = {
+    "latam": ["Rodríguez", "González", "Gómez", "Fernández", "López", "Díaz", "Martínez", "Pérez", "García", "Sánchez", "Romero", "Torres", "Ruiz"],
+    "europe": ["Smith", "Jones", "Miller", "Müller", "Novák", "Kowalski", "Ivanov", "Gruber", "Melnyk", "Hansen", "Silva", "García", "Martin", "Rossi"],
+    "africa": ["Koulibaly", "Mensa", "Touré", "Diallo", "Traoré", "Keita", "Sow", "Diagne", "Bamba", "Okocha", "Mokoena", "Zwane", "Williams"],
+    "asia": ["Kim", "Lee", "Park", "Choi", "Jung", "Wang", "Zhang", "Li", "Suzuki", "Sato", "Tanaka", "Takahashi", "Watanabe", "Al-Fardan"]
+};
+
+// Seeded random number generator
+function seededRandom(seed) {
+    const x = Math.sin(seed) * 10000;
+    return x - Math.floor(x);
+}
+
+// Seeded shuffle array
+function seededShuffle(array, seed) {
+    let m = array.length, t, i;
+    let currentSeed = seed;
+    while (m) {
+        currentSeed += 1;
+        i = Math.floor(seededRandom(currentSeed) * m--);
+        t = array[m];
+        array[m] = array[i];
+        array[i] = t;
+    }
+    return array;
+}
+
+function getTeamRegion(teamId) {
+    const id = parseInt(teamId);
+    if ([1, 5, 11, 14, 18, 20, 30, 32, 37, 44, 48].includes(id)) return "latam";
+    if ([4, 6, 8, 12, 16, 17, 21, 23, 25, 29, 36, 39, 41, 45, 46].includes(id)) return "europe";
+    if ([2, 10, 19, 24, 26, 31, 34, 38, 42, 47].includes(id)) return "africa";
+    return "asia"; // Default
+}
+
+function generateLineup(teamId, matchId, formation) {
+    let roster = SQUADS_DB[teamId];
+    
+    // Fallback: generate roster dynamically
+    if (!roster || roster.length === 0) {
+        roster = [];
+        const region = getTeamRegion(teamId);
+        const firstNames = {
+            "latam": ["Juan", "Carlos", "Luis", "José", "Mateo", "Santiago", "Sebastián", "Diego", "Alejandro", "Felipe", "Alexis", "Enzo", "Lautaro", "Cristian", "Rodrigo"],
+            "europe": ["John", "Thomas", "Michael", "Lukas", "Jan", "Peter", "David", "Robert", "Marc", "Daniel", "Kevin", "Oliver", "Harry", "Jack", "Sven"],
+            "africa": ["Moussa", "Aboubakar", "Kofi", "Sadio", "Youssef", "Samuel", "Ibrahim", "Amadou", "Didier", "Victor", "Idrissa", "Salif", "Cheikh", "Habib", "Kalidou"],
+            "asia": ["Ji-sung", "Hao", "Kenji", "Akira", "Yusuf", "Hiroshi", "Min-woo", "Ahmed", "Tariq", "Ali", "Reza", "Sardar", "Mehdi", "Koji", "Jun"]
+        }[region];
+        
+        const surnames = REGIONAL_SURNAMES[region];
+        
+        // Generate 1 GK, 6 D, 6 M, 5 F
+        let seed = parseInt(teamId) * 100;
+        
+        // GK
+        roster.push([firstNames[Math.floor(seededRandom(seed++) * firstNames.length)] + " " + surnames[Math.floor(seededRandom(seed++) * surnames.length)], "GK"]);
+        
+        // Defenders
+        for (let i = 0; i < 6; i++) {
+            roster.push([firstNames[Math.floor(seededRandom(seed++) * firstNames.length)] + " " + surnames[Math.floor(seededRandom(seed++) * surnames.length)], "D"]);
+        }
+        
+        // Midfielders
+        for (let i = 0; i < 6; i++) {
+            roster.push([firstNames[Math.floor(seededRandom(seed++) * firstNames.length)] + " " + surnames[Math.floor(seededRandom(seed++) * surnames.length)], "M"]);
+        }
+        
+        // Forwards
+        for (let i = 0; i < 5; i++) {
+            roster.push([firstNames[Math.floor(seededRandom(seed++) * firstNames.length)] + " " + surnames[Math.floor(seededRandom(seed++) * surnames.length)], "F"]);
+        }
+    }
+    
+    // Separate by roles
+    const gks = roster.filter(p => p[1] === "GK").map(p => p[0]);
+    const defs = roster.filter(p => p[1] === "D").map(p => p[0]);
+    const mids = roster.filter(p => p[1] === "M").map(p => p[0]);
+    const fwds = roster.filter(p => p[1] === "F").map(p => p[0]);
+    
+    // Seeded shuffle to make them variable across matches
+    const seedShift = parseInt(matchId);
+    const shuffledGks = seededShuffle([...gks], seedShift);
+    const shuffledDefs = seededShuffle([...defs], seedShift + 1);
+    const shuffledMids = seededShuffle([...mids], seedShift + 2);
+    const shuffledFwds = seededShuffle([...fwds], seedShift + 3);
+    
+    // Formations mappings
+    const FORMATION_POSITIONS = {
+        "4-3-3": [
+            ["GK", "GK"], ["RB", "D"], ["RCB", "D"], ["LCB", "D"], ["LB", "D"],
+            ["RCM", "M"], ["DM", "M"], ["LCM", "M"], ["RW", "F"], ["ST", "F"], ["LW", "F"]
+        ],
+        "4-4-2": [
+            ["GK", "GK"], ["RB", "D"], ["RCB", "D"], ["LCB", "D"], ["LB", "D"],
+            ["RM", "M"], ["RCM", "M"], ["LCM", "M"], ["LM", "M"], ["RS", "F"], ["LS", "F"]
+        ],
+        "3-5-2": [
+            ["GK", "GK"], ["RCB", "D"], ["CB", "D"], ["LCB", "D"], ["RWB", "M"],
+            ["RCM", "M"], ["DM", "M"], ["LCM", "M"], ["LWB", "M"], ["RS", "F"], ["LS", "F"]
+        ],
+        "4-2-3-1": [
+            ["GK", "GK"], ["RB", "D"], ["RCB", "D"], ["LCB", "D"], ["LB", "D"],
+            ["RDM", "M"], ["LDM", "M"], ["RAM", "M"], ["AM", "M"], ["LAM", "M"], ["ST", "F"]
+        ],
+        "5-3-2": [
+            ["GK", "GK"], ["RWB", "D"], ["RCB", "D"], ["CB", "D"], ["LCB", "D"],
+            ["LWB", "D"], ["RCM", "M"], ["DM", "M"], ["LCM", "M"], ["RS", "F"], ["LS", "F"]
+        ]
+    };
+    
+    const positions = FORMATION_POSITIONS[formation] || FORMATION_POSITIONS["4-3-3"];
+    const coordsList = FORMATION_COORDS[formation] || FORMATION_COORDS["4-3-3"];
+    
+    const starters = [];
+    let gkIdx = 0, defIdx = 0, midIdx = 0, fwdIdx = 0;
+    
+    positions.forEach((posInfo, idx) => {
+        const role = posInfo[1];
+        let name = "Giocatore";
+        if (role === "GK") {
+            name = shuffledGks[gkIdx++] || (gks[0] || "Portiere");
+        } else if (role === "D") {
+            name = shuffledDefs[defIdx++] || (defs[0] || "Difensore");
+        } else if (role === "M") {
+            name = shuffledMids[midIdx++] || (mids[0] || "Centrocampista");
+        } else if (role === "F") {
+            name = shuffledFwds[fwdIdx++] || (fwds[0] || "Attaccante");
+        }
+        
+        starters.push({
+            name: name,
+            coords: coordsList[idx]
+        });
+    });
+    
+    return starters;
+}
+
+function renderPitchLineup(lineup, isAway) {
+    const jerseyClass = isAway ? 'away-jersey' : 'home-jersey';
+    return lineup.map((player, idx) => {
+        const left = player.coords[0];
+        const top = player.coords[1];
+        return `
+            <div class="player-node" style="left: ${left}%; top: ${top}%;">
+                <div class="player-jersey ${jerseyClass}">${idx + 1}</div>
+                <div class="player-name">${player.name}</div>
+            </div>
+        `;
+    }).join('');
+}
+
+function parseScorers(scorersStr, teamName, isAway) {
+    if (!scorersStr || scorersStr === 'null') return [];
+    
+    let list = [];
+    try {
+        let cleaned = scorersStr;
+        if (cleaned.startsWith('{') && cleaned.endsWith('}')) {
+            cleaned = '[' + cleaned.slice(1, -1) + ']';
+        }
+        cleaned = cleaned.replace(/“/g, '"').replace(/”/g, '"');
+        list = JSON.parse(cleaned);
+    } catch (e) {
+        if (scorersStr.includes(',') || scorersStr.includes('"')) {
+            list = scorersStr.replace(/[\{\}\"]/g, '').split(',').map(s => s.trim());
+        } else {
+            list = [scorersStr];
+        }
+    }
+    
+    return list.map(item => {
+        const match = item.match(/(.*?)\s+(\d+)'/);
+        let name = item;
+        let minute = 0;
+        if (match) {
+            name = match[1];
+            minute = parseInt(match[2]);
+        } else {
+            const numMatch = item.match(/\d+/);
+            if (numMatch) minute = parseInt(numMatch[0]);
+        }
+        return {
+            name: name,
+            minute: minute,
+            team: teamName,
+            isAway: isAway,
+            type: 'goal'
+        };
+    });
+}
+
+function openMatchDetails(gameId) {
+    const game = STATE.games.find(g => g.id == gameId);
+    if (!game) return;
+
+    const modal = document.getElementById('match-details-modal');
+    const body = document.getElementById('match-details-modal-body');
+    if (!modal || !body) return;
+
+    const finishedVal = game.finished === 'TRUE' || game.finished === true;
+    const isLive = isGameLive(game);
+
+    const homeTeam = STATE.teamsMap[game.home_team_id];
+    const awayTeam = STATE.teamsMap[game.away_team_id];
+
+    const homeName = homeTeam ? homeTeam.name_en : (game.home_team_label || 'TBD');
+    const awayName = awayTeam ? awayTeam.name_en : (game.away_team_label || 'TBD');
+    const homeFlag = homeTeam ? homeTeam.flag : null;
+    const awayFlag = awayTeam ? awayTeam.flag : null;
+
+    const homeScore = finishedVal || isLive ? game.home_score : '-';
+    const awayScore = finishedVal || isLive ? game.away_score : '-';
+
+    let statusText = formatGameDate(game.local_date);
+    let statusClass = 'upcoming';
+    if (isLive && !finishedVal) {
+        statusText = `LIVE • ${getGameDisplayTime(game)}`;
+        statusClass = 'live';
+    } else if (finishedVal) {
+        statusText = 'FINITA';
+        statusClass = 'finished';
+    }
+
+    const stadium = STATE.stadiumsMap[game.stadium_id];
+    const stadiumName = stadium ? (stadium.name_en || stadium.name) : `Stadium ${game.stadium_id}`;
+    const stadiumCity = stadium ? stadium.city_en : 'N/A';
+    const stadiumCountry = stadium ? stadium.country_en : 'N/A';
+    const stadiumCapacity = stadium ? (stadium.capacity ? stadium.capacity.toLocaleString() : 'N/A') : 'N/A';
+
+    // Formations
+    const formations = ["4-3-3", "4-4-2", "3-5-2", "4-2-3-1", "5-3-2"];
+    const homeSeed = parseInt(game.id) * 31;
+    const awaySeed = parseInt(game.id) * 37;
+    const homeFormation = formations[Math.floor(seededRandom(homeSeed) * formations.length)];
+    const awayFormation = formations[Math.floor(seededRandom(awaySeed) * formations.length)];
+
+    const homeLineup = generateLineup(game.home_team_id, homeSeed, homeFormation);
+    const awayLineup = generateLineup(game.away_team_id, awaySeed, awayFormation);
+
+    // Parse scorers
+    const homeEvents = parseScorers(game.home_scorers, homeName, false);
+    const awayEvents = parseScorers(game.away_scorers, awayName, true);
+    const allEvents = [...homeEvents, ...awayEvents].sort((a, b) => a.minute - b.minute);
+
+    let eventsHtml = '';
+    if (allEvents.length === 0) {
+        eventsHtml = `<p style="text-align: center; color: var(--text-muted); font-size: 0.85rem; font-style: italic; margin-top: 15px;">Nessun evento registrato per questo incontro.</p>`;
+    } else {
+        eventsHtml = `
+            <div class="modal-events-list">
+                ${allEvents.map(e => `
+                    <div class="modal-event-row">
+                        <span class="modal-event-time">${e.minute}'</span>
+                        <span class="modal-event-icon">⚽</span>
+                        <span class="modal-event-detail"><strong>${e.name}</strong> (${e.team})</span>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+
+    body.innerHTML = `
+        <div class="modal-match-header">
+            <div class="team-header-block">
+                ${homeFlag ? `<img src="${homeFlag}" alt="" class="modal-team-flag">` : `<div class="bracket-flag-placeholder" style="width: 60px; height: 40px; font-size: 1.5rem;">?</div>`}
+                <div class="modal-team-name">${homeName}</div>
+            </div>
+            <div class="score-header-block">
+                <div class="modal-score-display">${homeScore} - ${awayScore}</div>
+                <span class="modal-status-badge ${statusClass}">${statusText}</span>
+            </div>
+            <div class="team-header-block">
+                ${awayFlag ? `<img src="${awayFlag}" alt="" class="modal-team-flag">` : `<div class="bracket-flag-placeholder" style="width: 60px; height: 40px; font-size: 1.5rem;">?</div>`}
+                <div class="modal-team-name">${awayName}</div>
+            </div>
+        </div>
+
+        <div class="modal-sub-nav">
+            <button class="modal-sub-btn active" data-pane="pane-formazioni">Formazioni & Tattiche</button>
+            <button class="modal-sub-btn" data-pane="pane-info">Dettagli & Eventi</button>
+        </div>
+
+        <!-- PANE: TACTICS & LINEUPS -->
+        <div class="modal-pane active" id="pane-formazioni">
+            <div class="pitch-toggle-bar">
+                <button class="pitch-toggle-btn active" data-pitch="home">${homeName}</button>
+                <button class="pitch-toggle-btn" data-pitch="away">${awayName}</button>
+            </div>
+            
+            <div class="tactical-pitch-container">
+                <!-- Home Pitch -->
+                <div class="tactical-pitch-wrapper active" id="pitch-wrapper-home">
+                    <div class="tactical-pitch-title">
+                        <span>${homeName}</span>
+                        <span class="team-formation">${homeFormation}</span>
+                    </div>
+                    <div class="tactical-pitch">
+                        <div class="pitch-line-center"></div>
+                        <div class="pitch-line-circle"></div>
+                        <div class="pitch-line-penalty-home"></div>
+                        <div class="pitch-line-penalty-away"></div>
+                        <div class="pitch-line-goal-home"></div>
+                        <div class="pitch-line-goal-away"></div>
+                        ${renderPitchLineup(homeLineup, false)}
+                    </div>
+                </div>
+
+                <!-- Away Pitch -->
+                <div class="tactical-pitch-wrapper" id="pitch-wrapper-away">
+                    <div class="tactical-pitch-title">
+                        <span>${awayName}</span>
+                        <span class="team-formation">${awayFormation}</span>
+                    </div>
+                    <div class="tactical-pitch">
+                        <div class="pitch-line-center"></div>
+                        <div class="pitch-line-circle"></div>
+                        <div class="pitch-line-penalty-home"></div>
+                        <div class="pitch-line-penalty-away"></div>
+                        <div class="pitch-line-goal-home"></div>
+                        <div class="pitch-line-goal-away"></div>
+                        ${renderPitchLineup(awayLineup, true)}
+                    </div>
+                </div>
+            </div>
+            <p class="pitch-disclaimer">⚠️ Nota: Le formazioni visualizzate sono supposizioni e stime tattiche prima del calcio d'inizio.</p>
+        </div>
+
+        <!-- PANE: INFO & EVENTS -->
+        <div class="modal-pane" id="pane-info">
+            <div class="stadium-info-card">
+                <div class="stadium-info-item">
+                    <span class="label">Stadio</span>
+                    <span class="value">${stadiumName}</span>
+                </div>
+                <div class="stadium-info-item">
+                    <span class="label">Città</span>
+                    <span class="value">${stadiumCity}, ${stadiumCountry}</span>
+                </div>
+                <div class="stadium-info-item">
+                    <span class="label">Capienza</span>
+                    <span class="value">${stadiumCapacity} Spettatori</span>
+                </div>
+                <div class="stadium-info-item">
+                    <span class="label">Match ID</span>
+                    <span class="value">Gara #${game.id} (${game.type.toUpperCase()})</span>
+                </div>
+            </div>
+
+            <div class="modal-match-events">
+                <div class="modal-events-title">Eventi Incontro</div>
+                ${eventsHtml}
+            </div>
+        </div>
+    `;
+
+    // Wire up pane sub-toggles inside modal
+    const subBtns = body.querySelectorAll('.modal-sub-btn');
+    const panes = body.querySelectorAll('.modal-pane');
+    subBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            subBtns.forEach(b => b.classList.remove('active'));
+            panes.forEach(p => p.classList.remove('active'));
+            btn.classList.add('active');
+            body.querySelector(`#${btn.getAttribute('data-pane')}`).classList.add('active');
+        });
+    });
+
+    // Wire up mobile pitch toggles
+    const toggleBtns = body.querySelectorAll('.pitch-toggle-btn');
+    const homeWrapper = body.querySelector('#pitch-wrapper-home');
+    const awayWrapper = body.querySelector('#pitch-wrapper-away');
+    toggleBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            toggleBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            if (btn.getAttribute('data-pitch') === 'home') {
+                homeWrapper.classList.add('active');
+                awayWrapper.classList.remove('active');
+            } else {
+                awayWrapper.classList.add('active');
+                homeWrapper.classList.remove('active');
+            }
+        });
+    });
+
+    // Show modal overlay
+    modal.classList.add('active');
+}
+
+// Global click event to catch clicks on match cards
+document.addEventListener('click', (e) => {
+    const card = e.target.closest('.match-card, .bracket-match-card');
+    if (card) {
+        // Exclude calendar button click
+        if (e.target.closest('.add-to-calendar-btn')) return;
+        const gameId = card.getAttribute('data-game-id');
+        if (gameId) {
+            openMatchDetails(gameId);
+        }
+    }
+});
+
+// Setup closing handlers
+document.addEventListener('DOMContentLoaded', () => {
+    const modal = document.getElementById('match-details-modal');
+    const closeBtn = document.getElementById('close-match-details-modal');
+    if (closeBtn && modal) {
+        closeBtn.addEventListener('click', () => {
+            modal.classList.remove('active');
+        });
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.classList.remove('active');
+            }
+        });
+    }
+});
+
 
