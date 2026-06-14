@@ -967,7 +967,6 @@ function startMatchSimulation() {
     const speed = parseInt(DOM.simSpeed.value) || 15;
     const associatedMatchId = DOM.simMatchSelect ? DOM.simMatchSelect.value : '';
 
-    // Reset Simulation State
     STATE.simulation = {
         timerId: null,
         isPaused: false,
@@ -982,6 +981,23 @@ function startMatchSimulation() {
         events: [],
         matchId: associatedMatchId
     };
+
+    if (associatedMatchId) {
+        const tournamentGame = STATE.games.find(g => g.id == associatedMatchId);
+        if (tournamentGame) {
+            tournamentGame.home_score = '0';
+            tournamentGame.away_score = '0';
+            tournamentGame.time_elapsed = '0';
+            tournamentGame.finished = false;
+            tournamentGame.home_scorers = 'null';
+            tournamentGame.away_scorers = 'null';
+            
+            // Re-render matches grid and ticker to show it is live
+            renderLiveMatchesTicker();
+            if (STATE.activeTab === 'partite') renderMatchesGrid();
+            if (STATE.activeTab === 'tabellone') renderBracket();
+        }
+    }
 
     // Update UI panels
     DOM.simConfigPanel.classList.add('hidden');
@@ -1016,6 +1032,29 @@ function simulationTick() {
     // Format and Update Clock
     DOM.simMatchTimer.innerText = formatSimClock(sim.time);
     DOM.simProgressBar.style.width = `${(sim.time / 90) * 100}%`;
+
+    // Update tournament game live state in real-time
+    if (sim.matchId) {
+        const tournamentGame = STATE.games.find(g => g.id == sim.matchId);
+        if (tournamentGame) {
+            tournamentGame.home_score = sim.homeScore.toString();
+            tournamentGame.away_score = sim.awayScore.toString();
+            tournamentGame.time_elapsed = sim.time.toString();
+            tournamentGame.finished = false;
+            
+            // Format simulated scorers list as JSON string matching API parser
+            tournamentGame.home_scorers = JSON.stringify(sim.homeScorers.map(s => `${s.name} ${s.minute}'`));
+            tournamentGame.away_scorers = JSON.stringify(sim.awayScorers.map(s => `${s.name} ${s.minute}'`));
+            
+            // Refresh views
+            renderLiveMatchesTicker();
+            if (STATE.activeTab === 'partite') renderMatchesGrid();
+            if (STATE.activeTab === 'tabellone') renderBracket();
+            
+            // Update modal if open for this match
+            updateModalLiveUpdates();
+        }
+    }
 
     // Halftime Pause Trigger
     if (sim.time === 45) {
@@ -1101,10 +1140,10 @@ function scoreGoal(side) {
     scorerItem.innerHTML = `<svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor" stroke="none"><circle cx="12" cy="12" r="10"></circle></svg> <span>${scorer} (${sim.time}')</span>`;
     
     if (side === 'home') {
-        sim.homeScorers.push(scorer);
+        sim.homeScorers.push({ name: scorer, minute: sim.time });
         DOM.simHomeScorersList.appendChild(scorerItem);
     } else {
-        sim.awayScorers.push(scorer);
+        sim.awayScorers.push({ name: scorer, minute: sim.time });
         DOM.simAwayScorersList.appendChild(scorerItem);
     }
 
@@ -1409,6 +1448,9 @@ async function pollLiveUpdates() {
         } else if (STATE.activeTab === 'tabellone') {
             renderBracket();
         }
+
+        // Also update open details modal if active
+        updateModalLiveUpdates();
         
         // Sync FantaMondiali in the background (if cloud active or on the tab)
         if (STATE.fanta.isCloud || STATE.activeTab === 'scommesse') {
@@ -2814,6 +2856,8 @@ function openMatchDetails(gameId) {
     const body = document.getElementById('match-details-modal-body');
     if (!modal || !body) return;
 
+    modal.setAttribute('data-game-id', gameId);
+
     const finishedVal = game.finished === 'TRUE' || game.finished === true;
     const isLive = isGameLive(game);
 
@@ -3024,13 +3068,97 @@ document.addEventListener('DOMContentLoaded', () => {
     if (closeBtn && modal) {
         closeBtn.addEventListener('click', () => {
             modal.classList.remove('active');
+            modal.removeAttribute('data-game-id');
         });
         modal.addEventListener('click', (e) => {
             if (e.target === modal) {
                 modal.classList.remove('active');
+                modal.removeAttribute('data-game-id');
             }
         });
     }
 });
+
+function updateModalLiveUpdates() {
+    const modal = document.getElementById('match-details-modal');
+    if (!modal || !modal.classList.contains('active')) return;
+
+    const gameId = modal.getAttribute('data-game-id');
+    if (!gameId) return;
+
+    const game = STATE.games.find(g => g.id == gameId);
+    if (!game) return;
+
+    const finishedVal = game.finished === 'TRUE' || game.finished === true || game.time_elapsed === 'finished';
+    const isLive = isGameLive(game);
+
+    if (!isLive && !finishedVal) return;
+
+    // 1. Update scores display
+    const scoreDisplay = modal.querySelector('.modal-score-display');
+    if (scoreDisplay) {
+        scoreDisplay.innerText = `${game.home_score} - ${game.away_score}`;
+    }
+
+    // 2. Update status badge
+    const statusBadge = modal.querySelector('.modal-status-badge');
+    if (statusBadge) {
+        let statusText = formatGameDate(game.local_date);
+        let statusClass = 'upcoming';
+        if (isLive && !finishedVal) {
+            statusText = `LIVE • ${getGameDisplayTime(game)}`;
+            statusClass = 'live';
+        } else if (finishedVal) {
+            statusText = 'FINITA';
+            statusClass = 'finished';
+        }
+        statusBadge.innerText = statusText;
+        statusBadge.className = `modal-status-badge ${statusClass}`;
+    }
+
+    // 3. Update events timeline
+    const eventsContainer = modal.querySelector('.modal-match-events');
+    if (eventsContainer) {
+        const homeTeam = STATE.teamsMap[game.home_team_id];
+        const awayTeam = STATE.teamsMap[game.away_team_id];
+        const homeName = homeTeam ? homeTeam.name_en : (game.home_team_label || 'TBD');
+        const awayName = awayTeam ? awayTeam.name_en : (game.away_team_label || 'TBD');
+
+        const homeEvents = parseScorers(game.home_scorers, homeName, false);
+        const awayEvents = parseScorers(game.away_scorers, awayName, true);
+        const allEvents = [...homeEvents, ...awayEvents].sort((a, b) => a.minute - b.minute);
+
+        let eventsHtml = '';
+        if (allEvents.length === 0) {
+            eventsHtml = `<p style="text-align: center; color: var(--text-muted); font-size: 0.85rem; font-style: italic; margin-top: 15px;">Nessun evento registrato per questo incontro.</p>`;
+        } else {
+            eventsHtml = `
+                <div class="modal-events-list">
+                    ${allEvents.map(e => `
+                        <div class="modal-event-row">
+                            <span class="modal-event-time">${e.minute}'</span>
+                            <span class="modal-event-icon">⚽</span>
+                            <span class="modal-event-detail"><strong>${e.name}</strong> (${e.team})</span>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        const listContainer = eventsContainer.querySelector('.modal-events-list') || eventsContainer;
+        if (listContainer) {
+            const list = eventsContainer.querySelector('.modal-events-list');
+            if (list) {
+                list.outerHTML = eventsHtml;
+            } else {
+                const titleElement = eventsContainer.querySelector('.modal-events-title');
+                const titleHtml = titleElement ? titleElement.outerHTML : '<div class="modal-events-title">Eventi Incontro</div>';
+                eventsContainer.innerHTML = titleHtml + eventsHtml;
+            }
+        }
+    }
+}
+
+window.updateModalLiveUpdates = updateModalLiveUpdates;
 
 
