@@ -7,6 +7,7 @@ const STATE = {
     teamsMap: {},
     stadiumsMap: {},
     activeTab: 'partite',
+    isFirstLivePoll: true, // Baseline check for live polls to ignore historic scores on startup/reconnection
     filters: {
         searchPartite: '',
         stage: 'all',
@@ -1207,6 +1208,9 @@ function stopMatchSimulation() {
         clearInterval(sim.timerId);
     }
     
+    // Reset live poll baseline to ignore mock score differences on reconnection
+    STATE.isFirstLivePoll = true;
+    
     // Re-enable team select dropdowns
     if (DOM.simHomeTeam) DOM.simHomeTeam.disabled = false;
     if (DOM.simAwayTeam) DOM.simAwayTeam.disabled = false;
@@ -1432,7 +1436,11 @@ async function pollLiveUpdates() {
         if (!Array.isArray(newGames) || newGames.length === 0) return;
 
         // Detect goal events in live matches
-        detectGoals(newGames);
+        if (!STATE.isFirstLivePoll) {
+            detectGoals(newGames);
+        } else {
+            STATE.isFirstLivePoll = false;
+        }
         
         // Update state
         STATE.games = newGames;
@@ -1479,6 +1487,9 @@ async function pollGroupsUpdates() {
 
 function detectGoals(newGames) {
     newGames.forEach(newGame => {
+        // Only detect goal events for active live matches
+        if (!isGameLive(newGame)) return;
+
         const oldGame = STATE.games.find(g => g.id == newGame.id);
         if (!oldGame) return;
 
@@ -1516,6 +1527,7 @@ function showGoalToast(match, scoringTeam, newScore) {
 
     const toast = document.createElement('div');
     toast.className = 'goal-toast';
+    toast.style.cursor = 'pointer';
     toast.innerHTML = `
         <div class="toast-icon">⚽</div>
         <div class="toast-content">
@@ -1525,16 +1537,36 @@ function showGoalToast(match, scoringTeam, newScore) {
         </div>
     `;
 
+    // Manual click dismiss (smooth transition fade-out)
+    toast.addEventListener('click', () => {
+        if (!toast.classList.contains('fade-out')) {
+            toast.classList.add('fade-out');
+            setTimeout(() => {
+                toast.remove();
+            }, 300);
+        }
+    });
+
     container.appendChild(toast);
     
     // Play celebratory sound
     playGoalSound();
 
+    // Auto dismiss after 5 seconds
     setTimeout(() => {
-        toast.classList.add('fade-out');
-        toast.addEventListener('transitionend', () => {
-            toast.remove();
-        });
+        if (toast.parentNode) {
+            toast.classList.add('fade-out');
+            
+            // Safe fallback removal in case transitionend event doesn't fire
+            const removeFallback = setTimeout(() => {
+                toast.remove();
+            }, 400);
+
+            toast.addEventListener('transitionend', () => {
+                clearTimeout(removeFallback);
+                toast.remove();
+            }, { once: true });
+        }
     }, 5000);
 }
 

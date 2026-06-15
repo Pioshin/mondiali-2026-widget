@@ -1599,6 +1599,7 @@ body {
 }
 
 .goal-toast.fade-out {
+    animation: none !important;
     opacity: 0;
     transform: translateX(50px) scale(0.95);
 }
